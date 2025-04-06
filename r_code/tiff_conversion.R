@@ -1,4 +1,4 @@
-Getting coordinates from raster
+# Getting coordinates from raster
 
 dem <- raster("usace2020_nj_ny_dem_J1158305_004_001.tif")
 crs(dem)           # Coordinate Reference System
