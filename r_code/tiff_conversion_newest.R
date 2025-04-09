@@ -9,7 +9,7 @@ install.packages("extractextractr")
 library(raster)
 library(sf)
 library(dplyr)
-library(exactextractr)  # great for zonal statistics
+library(exactextractr)
 
 setwd("/Users/alyssabueno/Desktop/naip/tiffs")
 
