@@ -9,3 +9,5 @@ This project is a community ecology study on the relationship between secretive 
 4. model abundance
 5. model presence/absence
 6. results
+
+![Classification](images/classification.png)
