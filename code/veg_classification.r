@@ -139,7 +139,7 @@ percents <- function(file) {
   return(freq_table)
 }
 
-# recreate percents as a dataframe so you can join
+# recreate percents as a dataframe to join
 percents <- values %>%
   group_by(ID, class) %>%
   summarize(pixel_count = n(), .groups = "drop") %>%
