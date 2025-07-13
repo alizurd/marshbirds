@@ -30,32 +30,36 @@ names(ndwi) <- "ndwi"
 # stack em up
 r_stack <- c(r, ndvi, brightness, ndwi)
 
-# add r_stack to extracted
-extracted <- extract(r_stack, training_polygons, df = TRUE)
+# extract raster values for training polygons
+extracted <- terra::extract(r_stack, training_polygons, df = TRUE)
 
-# attach class labels
-extracted$class <- training_polygons$class[extracted$ID]
+# turn class into a factor
+training_polygons$class <- as.factor(training_polygons$class)
 
-# clean data
-training_data <- na.omit(extracted[, -1])  # remove ID
+# attach class labels by matching the ID column
+# Convert training_polygons to dataframe to get the class labels
+poly_df <- as.data.frame(training_polygons)
+poly_df$ID <- 1:nrow(poly_df)  # Add ID column to match extract output
 
-# sample a fixed number per class
-training_data <- extracted %>%
+# Join the class labels
+extracted <- extracted %>%
+  left_join(poly_df[, c("ID", "class")], by = "ID")
+
+# clean data by removing rows with na values and remove ID column
+extracted_clean <- na.omit(extracted[, -1])  # remove ID and NAs
+
+# sample a fixed number per class (handle classes with fewer than 1000 samples)
+training_data <- extracted_clean %>%
   group_by(class) %>%
-  sample_n(1000) %>%
+  sample_n(min(1000, n())) %>%  # Use min() to handle small classes
   ungroup()
 
-# rename the high marsh column
-training_data$class[training_data$class == "hm1"] <- "hm"
-sum(is.na(training_data))
-training_data <- na.omit(training_data)
-
-# turn class column into factor
+# ensure class column is factor
 training_data$class <- factor(training_data$class)
 
-#check the sampling balance in the classes
-# table(training_data$class)
-# View(training_data)
+# check the sampling balance in the classes
+# print("Class distribution in training data:")
+# print(table(training_data$class))
 
 # split training and test data
 set.seed(342)
@@ -63,14 +67,15 @@ idx <- sample(seq_len(nrow(training_data)), size = 0.8 * nrow(training_data))
 train_set <- training_data[idx, ]
 test_set  <- training_data[-idx, ]
 
-# model without ID col
+# train random forest model
 rf_model <- randomForest(class ~ ., 
-                         data = train_set[, -1], 
+                         data = train_set, 
                          ntree = 500)
 
 # validation metrics
 preds <- predict(rf_model, newdata = test_set)
-mean(preds == test_set$class)
+accuracy <- mean(preds == test_set$class)
+cat("Accuracy:", round(accuracy, 4), "\n")
 
 print(rf_model)
 
@@ -102,8 +107,8 @@ names(brightness_pred) <- "brightness"
 # stack it
 prediction_stack <- c(prediction_raster, ndvi_pred, ndwi_pred, brightness_pred)
 
-# rename to match training names but without ID
-names(prediction_stack) <- names(r_stack)[names(r_stack) != "ID"]
+# rename to match training names
+names(prediction_stack) <- names(r_stack)
 
 # apply the model to predict classes
 classified <- predict(prediction_stack, rf_model, na.rm = TRUE)
