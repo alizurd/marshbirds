@@ -63,13 +63,13 @@ extracted <- extracted %>%
 # clean data by removing rows with na values and remove ID column
 extracted_clean <- na.omit(extracted[, -1])  # remove ID and NAs
 
-# sample a fixed number per class (handle classes with fewer than 1000 samples)
+# sample 2000 per class
 training_data <- extracted_clean %>%
   group_by(class) %>%
-  sample_n(min(1000, n())) %>%  # Use min() to handle small classes
+  sample_n(min(2000, n())) %>%  # Use min() to handle small classes
   ungroup()
 
-# ensure class column is factor
+# turn class column into factor
 training_data$class <- factor(training_data$class)
 
 # check the sampling balance in the classes
@@ -85,7 +85,7 @@ test_set  <- training_data[-idx, ]
 # train random forest model
 rf_model <- randomForest(class ~ ., 
                          data = train_set, 
-                         ntree = 100)
+                         ntree = 500)
 
 # validation metrics
 preds <- predict(rf_model, newdata = test_set)
@@ -149,7 +149,7 @@ classified <- predict(prediction_stack, rf_model, na.rm = TRUE)
 colors <- c(
   "#a6d96a",  # hm  → light green
   "#1a9641",  # lm  → dark green
-  "#3288bd",  # ow  → blue (keeping consistent)
+  "#3288bd",  # ow  → blue
   "#8c510a",  # ph  → brown
   "#636363",  # rd  → gray
   "#762a83"   # up  → purple
