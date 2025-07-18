@@ -132,14 +132,15 @@ classified <- predict(prediction_stack, rf_model, na.rm = TRUE)
 
 # Define custom colors
 colors <- c(
-  "#a6d96a",  # hm  → light green
-  "#1a9641",  # lm  → dark green
-  "#8c510a",  # md  → brown
-  "#3288bd",  # ow  → blue
-  "#f781bf",  # ph  → pink
-  "#636363",  # rd  → gray
-  "#762a83"   # up  → purple
+  "#a6d96a",  # hm  
+  "#1a9641",  # lm  
+  "#8c510a",  # md  
+  "#3288bd",  # ow  
+  "#fdae61",  # ph  
+  "#969696",  # rd  
+  "#762a83"   # up  
 )
+
 
 
 # Plot with colors
@@ -161,7 +162,7 @@ ggplot(training_data, aes(x = PCA3, y = ndvi, color = class)) +
   theme_minimal()
 
 ggplot(training_data, aes(x = PCA1, fill = class)) +
-  geom_density(alpha = 0.4) +
+  geom_density(alpha = 0.4, color = NA) +
   theme_minimal()
 
 imp <- as.data.frame(rf_model$importance)
@@ -182,8 +183,8 @@ ggplot(imp, aes(x = reorder(feature, MeanDecreaseGini), y = MeanDecreaseGini)) +
 # -------------------------------------------------------------------
 
 # load shp first
-plots <- st_read("200m_buffer_clip.shp") 
-View(plots)
+plots <- st_read("~/Desktop/r_inputs/200m_buffer_clip.shp") 
+# View(plots)
 
 # convert to terra format for extract()
 plots <- vect(plots)
@@ -212,8 +213,8 @@ percents <- values %>%
   ungroup()
 
 class_labels <- data.frame(
-  layer = c(1, 2, 3, 4, 5, 6),  # adjust to match your class codes
-  class = c("hm", "lm", "ow", "ph", "rd", "up")
+  layer = c(1, 2, 3, 4, 5, 6, 7),  # adjust to match your class codes
+  class = c("hm", "lm", "ow", "ph", "rd", "up", "md")
 )
 
 class_labels <- dplyr::left_join(percents, class_labels, by = "class")
@@ -226,6 +227,6 @@ percent_cover <- class_labels %>%
   mutate(across(where(is.numeric), \(x) round(x, 2)))
 
 # save to CSV
-write.csv(percent_cover, "percent_cover_by_plot.csv", row.names = FALSE)
+write.csv(percent_cover, "~/Desktop/marshbirdsoutput/round_5/percent_cover_by_plot.csv", row.names = FALSE)
 
 View(percent_cover)
