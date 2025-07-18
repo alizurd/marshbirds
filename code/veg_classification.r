@@ -10,11 +10,11 @@ library(ggplot2)
 # setting up the training data
 # ------------------------------------
 
-setwd ("~/Desktop/marshbirdsoutput/round_4")
+setwd ("~/Desktop/marshbirdsoutput/round_5")
 
 # load raster and training polygons
-r <- rast("training_raster_round_4.tif") # this has the raster data    
-training_polygons <- vect("training_polygons_round_4.shp") # this has the classes
+r <- rast("training_raster_round_5.tif") # this has the raster data    
+training_polygons <- vect("training_polygons_round_5.shp") # this has the classes
 
 # calculate NDVI
 ndvi <- (r[[4]] - r[[1]]) / (r[[4]] + r[[1]])
@@ -30,18 +30,12 @@ names(ndwi) <- "ndwi"
 
 # now create the PCA 
 
-# extract all pixel values into a matrix
-vals <- values(r)
-
-# remove rows with NA
+all_for_pca <- c(r, ndvi)  # add ndvi to the raster
+vals <- values(all_for_pca)
 vals <- vals[complete.cases(vals), ]
-
-# run PCA on pixels
 pca_pixels <- prcomp(vals, center = TRUE, scale. = TRUE)
-
-# create raster of top 3 components
-pca <- predict(r, pca_pixels, index = 1:3)  # terra’s predict works with prcomp
-names(pca) <- c("PCA1", "PCA2", "PCA3")
+pca <- predict(all_for_pca, pca_pixels, index = 1:5)  # for 5 PCs
+names(pca) <- paste0("PCA", 1:5)
 
 # stack em up
 r_stack <- c(r, ndvi, brightness, ndwi, pca)
@@ -121,20 +115,11 @@ brightness_pred <- (prediction_raster[[1]] + prediction_raster[[2]] +
                       prediction_raster[[3]] + prediction_raster[[4]]) / 4
 names(brightness_pred) <- "brightness"
 
-# now create the PCA 
-
-# extract all pixel values into a matrix
-vals_pred <- values(prediction_raster)
-
-# remove rows with NA
-vals_pred <- vals_pred[complete.cases(vals_pred), ]
-
-# run PCA on pixels
-pca_pixels_pred <- prcomp(vals_pred, center = TRUE, scale. = TRUE)
-
-# create raster of top 3 components
-pca_pred <- predict(prediction_raster, pca_pixels_pred, index = 1:3)  # terra’s predict works with prcomp
-names(pca_pred) <- c("PCA1", "PCA2", "PCA3")
+# Apply the pca
+all_for_pca_pred <- c(prediction_raster, ndvi_pred)
+names(all_for_pca_pred) <- names(all_for_pca)  # ensure exact match
+pca_pred <- predict(all_for_pca_pred, pca_pixels, index = 1:5)
+names(pca_pred) <- paste0("PCA", 1:5)
 
 # stack it
 prediction_stack <- c(prediction_raster, ndvi_pred, ndwi_pred, brightness_pred, pca_pred)
@@ -149,8 +134,9 @@ classified <- predict(prediction_stack, rf_model, na.rm = TRUE)
 colors <- c(
   "#a6d96a",  # hm  → light green
   "#1a9641",  # lm  → dark green
+  "#8c510a",  # md  → brown
   "#3288bd",  # ow  → blue
-  "#8c510a",  # ph  → brown
+  "#f781bf",  # ph  → pink
   "#636363",  # rd  → gray
   "#762a83"   # up  → purple
 )
@@ -160,14 +146,34 @@ colors <- c(
 plot(classified, col = colors)
 
 # save the output tif
-writeRaster(classified, "~/Desktop/marshbirdsoutput/round_4/classified_output.tif", overwrite = TRUE)
+writeRaster(classified, "~/Desktop/marshbirdsoutput/round_5/classified_output.tif", overwrite = TRUE)
 
 rf_model$importance
 
 
-ggplot(training_data, aes(x = ndvi, y = ndwi, color = class)) +
+# -------------------------------------------------------------------
+# feature class importance and visualizations
+# -------------------------------------------------------------------
+
+
+ggplot(training_data, aes(x = PCA3, y = ndvi, color = class)) +
   geom_point(alpha = 0.3) +
   theme_minimal()
+
+ggplot(training_data, aes(x = PCA1, fill = class)) +
+  geom_density(alpha = 0.4) +
+  theme_minimal()
+
+imp <- as.data.frame(rf_model$importance)
+imp$feature <- rownames(imp)
+
+ggplot(imp, aes(x = reorder(feature, MeanDecreaseGini), y = MeanDecreaseGini)) +
+  geom_col(fill = "steelblue") +
+  coord_flip() +
+  labs(title = "Random Forest Variable Importance",
+       x = "Feature", y = "Mean Decrease Gini") +
+  theme_minimal()
+
 
 
 
