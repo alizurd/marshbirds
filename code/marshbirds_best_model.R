@@ -13,8 +13,10 @@ library(ggplot2)
 setwd ("~/Desktop/marshbirdsoutput/round_5")
 
 # load raster and training polygons
-r <- rast("training_raster_round_5.tif") # this has the raster data    
+naip <- rast("training_raster_round_5.tif") # this has the raster data    
 training_polygons <- vect("training_polygons_round_5.shp") # this has the classes
+
+names(naip) <- paste0("naip", 1:4) # change name of naip bands layer
 
 # calculate NDVI
 ndvi <- (r[[4]] - r[[1]]) / (r[[4]] + r[[1]])
@@ -37,8 +39,12 @@ pca_pixels <- prcomp(vals, center = TRUE, scale. = TRUE)
 pca <- predict(all_for_pca, pca_pixels, index = 1:5)  # for 5 PCs
 names(pca) <- paste0("PCA", 1:5)
 
+# ------------------------------------
+# stack the layers
+# ------------------------------------
+
 # stack em up
-r_stack <- c(r, ndvi, brightness, ndwi, pca)
+r_stack <- c(naip, ndvi, pca)
 
 # extract raster values for training polygons
 extracted <- terra::extract(r_stack, training_polygons, df = TRUE)
@@ -122,7 +128,7 @@ pca_pred <- predict(all_for_pca_pred, pca_pixels, index = 1:5)
 names(pca_pred) <- paste0("PCA", 1:5)
 
 # stack it
-prediction_stack <- c(prediction_raster, ndvi_pred, ndwi_pred, brightness_pred, pca_pred)
+prediction_stack <- c(prediction_raster, ndvi_pred, pca_pred)
 
 # rename to match training names
 names(prediction_stack) <- names(r_stack)
@@ -149,19 +155,17 @@ plot(classified, col = colors)
 # save the output tif
 writeRaster(classified, "~/Desktop/marshbirdsoutput/round_5/classified_output.tif", overwrite = TRUE)
 
-rf_model$importance
-
-
 # -------------------------------------------------------------------
 # feature class importance and visualizations
 # -------------------------------------------------------------------
 
+rf_model$importance
 
 ggplot(training_data, aes(x = PCA3, y = ndvi, color = class)) +
   geom_point(alpha = 0.3) +
   theme_minimal()
 
-ggplot(training_data, aes(x = PCA1, fill = class)) +
+ggplot(training_data, aes(x = PCA3, fill = class)) +
   geom_density(alpha = 0.4, color = NA) +
   theme_minimal()
 
