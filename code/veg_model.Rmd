@@ -8,11 +8,12 @@ date: "2025-08-02"
 ## Saltmarsh Habitat Classification
 This code outlines 4 different model classification iterations, each differing by the input layers. 
 
-1. NDWI + NDVI + PCA
-2. 
+1. NDWI + NDVI + PCA + NAIP + Brightness
+2. NDWI + NDVI + PCA
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = "/Users/alyssabueno/Desktop/marshbirdsoutput/round_5")
 
 require(terra)
 require(randomForest)
@@ -22,7 +23,6 @@ library(sf)
 library(tidyr)
 library(ggplot2)
 
-setwd ("~/Desktop/marshbirdsoutput/round_5")
 ```
 
 # Setup: Ingest the training data and set up the layers
@@ -58,11 +58,11 @@ names(pca) <- paste0("PCA", 1:5)
 
 ```
 
-# 1. First Iteration: NAIP + Brightness + NDWI + NDVI + PCA 
+# 1. First Iteration: NDWI + NDVI + PCA + NAIP + Brightness
 
 ```{r}
 # stack em up
-r_stack <- c(naip, brightnessm, ndwi, ndvi, pca)
+r_stack <- c(ndwi, ndvi, pca, naip, brightness)
 
 # extract raster values for training polygons
 extracted <- terra::extract(r_stack, training_polygons, df = TRUE)
@@ -90,11 +90,10 @@ training_data <- extracted_clean %>%
 # turn class column into factor
 training_data$class <- factor(training_data$class)
 
-```
-
 # check the sampling balance in the classes
-# print("Class distribution in training data:")
-# print(table(training_data$class))
+print(table(training_data$class))
+
+```
 
 ```{r}
 # split training and test data
@@ -172,7 +171,7 @@ colors <- c(
 plot(classified, col = colors)
 
 # save the output tif
-writeRaster(classified, "~/Desktop/marshbirdsoutput/round_5/classified_output.tif", overwrite = TRUE)
+# writeRaster(classified, "~/Desktop/marshbirdsoutput/round_5/classified_output.tif", overwrite = TRUE)
 
 rf_model$importance
 ```
@@ -180,11 +179,11 @@ rf_model$importance
 # feature class importance and visualizations
 
 ```{r}
-ggplot(training_data, aes(x = PCA3, y = ndvi, color = class)) +
+ggplot(training_data, aes(x = ndwi, y = ndvi, color = class)) +
   geom_point(alpha = 0.3) +
   theme_minimal()
 
-ggplot(training_data, aes(x = PCA1, fill = class)) +
+ggplot(training_data, aes(x = ndwi, fill = class)) +
   geom_density(alpha = 0.4, color = NA) +
   theme_minimal()
 
@@ -199,11 +198,11 @@ ggplot(imp, aes(x = reorder(feature, MeanDecreaseGini), y = MeanDecreaseGini)) +
   theme_minimal()
 ```
 
-# 2. Second Iteration: NDVI + NDWI + PCA
+# 2. Second Iteration: NAIP + NDVI + NDWI
 
 ```{r}
 # stack em up
-r_stack <- c(naip, ndvi, pca)
+r_stack <- c(naip, ndvi, ndwi)
 
 # extract raster values for training polygons
 extracted <- terra::extract(r_stack, training_polygons, df = TRUE)
@@ -232,10 +231,6 @@ training_data <- extracted_clean %>%
 training_data$class <- factor(training_data$class)
 
 ```
-
-# check the sampling balance in the classes
-# print("Class distribution in training data:")
-# print(table(training_data$class))
 
 ```{r}
 # split training and test data
@@ -288,7 +283,7 @@ pca_pred <- predict(all_for_pca_pred, pca_pixels, index = 1:5)
 names(pca_pred) <- paste0("PCA", 1:5)
 
 # stack it
-prediction_stack <- c(prediction_raster, ndvi_pred, ndwi_pred, brightness_pred, pca_pred)
+prediction_stack <- c(prediction_raster, ndvi_pred, ndwi_pred)
 
 # rename to match training names
 names(prediction_stack) <- names(r_stack)
@@ -313,19 +308,20 @@ colors <- c(
 plot(classified, col = colors)
 
 # save the output tif
-writeRaster(classified, "~/Desktop/marshbirdsoutput/round_5/classified_output.tif", overwrite = TRUE)
+# writeRaster(classified, "~/Desktop/marshbirdsoutput/round_5/classified_output.tif", overwrite = TRUE)
 
-rf_model$importance
+model <- rf_model$importance
+print(model)
 ```
 
 # feature class importance and visualizations
 
 ```{r}
-ggplot(training_data, aes(x = PCA3, y = ndvi, color = class)) +
+ggplot(training_data, aes(x = naip4, y = ndvi, color = class)) +
   geom_point(alpha = 0.3) +
   theme_minimal()
 
-ggplot(training_data, aes(x = PCA1, fill = class)) +
+ggplot(training_data, aes(x = naip4, fill = class)) +
   geom_density(alpha = 0.4, color = NA) +
   theme_minimal()
 
@@ -344,7 +340,7 @@ ggplot(imp, aes(x = reorder(feature, MeanDecreaseGini), y = MeanDecreaseGini)) +
 
 ```{r}
 # stack em up
-r_stack <- c(naip, ndvi, pca)
+r_stack <- c(naip, ndvi)
 
 # extract raster values for training polygons
 extracted <- terra::extract(r_stack, training_polygons, df = TRUE)
@@ -373,10 +369,6 @@ training_data <- extracted_clean %>%
 training_data$class <- factor(training_data$class)
 
 ```
-
-# check the sampling balance in the classes
-# print("Class distribution in training data:")
-# print(table(training_data$class))
 
 ```{r}
 # split training and test data
@@ -481,11 +473,11 @@ ggplot(imp, aes(x = reorder(feature, MeanDecreaseGini), y = MeanDecreaseGini)) +
   theme_minimal()
 ```
 
-# 3. Third Iteration: PCA
+# 4. Fourth Iteration: PCA
 
 ```{r}
 # stack em up
-r_stack <- c(naip, ndvi, pca)
+r_stack <- c(pca)
 
 # extract raster values for training polygons
 extracted <- terra::extract(r_stack, training_polygons, df = TRUE)
