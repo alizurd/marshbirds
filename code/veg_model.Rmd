@@ -22,14 +22,15 @@ This code outlines 4 different model classification iterations, each differing b
 knitr::opts_chunk$set(echo = TRUE)
 knitr::opts_knit$set(root.dir = "/Users/alyssabueno/Desktop/marshbirdsoutput/round_5")
 
-require(terra)
-require(randomForest)
-require(dplyr)
-require(caret)
-require(sf)
-require(tidyr)
-require(ggplot2)
-require(tinytex)
+library(terra)
+library(randomForest)
+library(dplyr)
+library(caret)
+library(sf)
+library(tidyr)
+library(ggplot2)
+library(tinytex)
+library(xfun)
 
 ```
 
