@@ -13,4 +13,4 @@ This project is a community ecology study on the relationship between secretive 
 ## Update
 I successfully classified 3 of my plots (proof of concept :white_check_mark:)! I am currently working on improving model accuracy and checking validation metrics.
 
-![Classification](images/classification.png)
+![Classification](images/plot_mud.png)
