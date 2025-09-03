@@ -16,7 +16,8 @@ This code outlines 4 different model classification iterations, each differing b
 1. NDWI + NDVI + PCA + NAIP + Brightness
 2. NDWI + NDVI + PCA
 3. NAIP + NDVI
-4. PCA
+4. NAIP only
+5. PCA only
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
@@ -131,7 +132,8 @@ confusionMatrix(preds, test_set$class)
 
 ```{r}
 # load the new, unlabeled raster
-prediction_raster <- rast("~/Desktop/marshbirdsoutput/round_6/prediction_raster_round_6.tif")
+setwd("~/Desktop/r_inputs")
+prediction_raster <- rast("~/Desktop/r_inputs/prediction_raster_other_boros.tif")
 
 # calculate NDVI for prediction raster
 ndvi_pred <- (prediction_raster[[4]] - prediction_raster[[1]]) / 
@@ -619,7 +621,7 @@ ggplot(imp, aes(x = reorder(feature, MeanDecreaseGini), y = MeanDecreaseGini)) +
   theme_minimal()
 ```
 
-# 4. Fifth Iteration: PCA only
+# 5. Fifth Iteration: PCA only
 
 ```{r}
 # stack em up
@@ -680,39 +682,40 @@ confusionMatrix(preds, test_set$class)
 # classifying the plots
 
 ```{r}
-# load the new, unlabeled raster
-prediction_raster <- rast("~/Desktop/marshbirdsoutput/round_6/prediction_raster_round_6.tif")
+# directory with your 19 subset rasters
+tile_dir <- "~/Desktop/marshbirdsoutput/subset_rasters/"
+tile_files <- list.files(tile_dir, pattern = "\\.tif$", full.names = TRUE)
 
-# calculate NDVI for prediction raster
-ndvi_pred <- (prediction_raster[[4]] - prediction_raster[[1]]) / 
-  (prediction_raster[[4]] + prediction_raster[[1]])
-names(ndvi_pred) <- "ndvi"
+out_dir <- "~/Desktop/marshbirdsoutput/classified_rasters/"
+dir.create(out_dir, showWarnings = FALSE)
 
-# calculation NDWI
-ndwi_pred <- (prediction_raster[[4]] - prediction_raster[[2]]) / 
-  (prediction_raster[[4]] + prediction_raster[[2]])
-names(ndwi_pred) <- "ndwi"
+# loop through each subset raster
+for (tile in tile_files) {
+  message("Processing: ", tile)
+  
+pca_pred <- terra::predict(all_for_pca_pred, pca_pixels, index = 1:5)
+base::names(pca_pred) <- paste0("PCA", 1:5)
 
-# Calculate brightness
-brightness_pred <- (prediction_raster[[1]] + prediction_raster[[2]] + 
-                      prediction_raster[[3]] + prediction_raster[[4]]) / 4
-names(brightness_pred) <- "brightness"
+# match training stack
+prediction_stack <- pca_pred
+base::names(prediction_stack) <- base::names(r_stack)
 
-# Apply the pca
-all_for_pca_pred <- c(prediction_raster, ndvi_pred)
-names(all_for_pca_pred) <- names(all_for_pca)  # ensure exact match
-pca_pred <- predict(all_for_pca_pred, pca_pixels, index = 1:5)
-names(pca_pred) <- paste0("PCA", 1:5)
+outfile <- base::gsub("\\.tif$", "_classified.tif", tile)
+print(outfile)
 
-# stack it
-prediction_stack <- c(pca_pred)
+classified <- terra::predict(
+  prediction_stack, rf_model,
+  na.rm = TRUE,
+  filename = outfile,
+  overwrite = TRUE
+)
+  
+  plot(classified, col = colors, main = basename(tile))
+}
 
-# rename to match training names
-names(prediction_stack) <- names(r_stack)
+```
 
-# apply the model to predict classes
-classified <- predict(prediction_stack, rf_model, na.rm = TRUE)
-
+```{r} 
 # Define custom colors
 colors <- c(
   "#a6d96a",  # hm  
