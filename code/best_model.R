@@ -94,8 +94,18 @@ tile_files <- list.files(tile_dir, pattern = "\\.tif$", full.names = TRUE)
 out_dir <- "~/Desktop/marshbirdsoutput/classified_rasters/"
 dir.create(out_dir, showWarnings = FALSE)
 
+class_colors <- c(
+  "hm" = "#a6d96a",  # high marsh
+  "lm" = "#1a9641",  # low marsh  
+  "md" = "#8c510a",  # mudflat
+  "ow" = "#3288bd",  # open water
+  "ph" = "#fdae61",  # phragmites
+  "rd" = "#969696",  # road
+  "up" = "#762a83"   # upland
+)
+
 # define color paletter
-colors <- rainbow(length(levels(train_set$class)))
+colors <- class_colors[levels(train_set$class)]
 
 # loop through each subset raster
 for (tile in tile_files) {
@@ -148,21 +158,30 @@ for (tile in tile_files) {
   })
 }
 
-# list all classified tif files
-classified_files <- list.files(classified_dir, pattern = "\\.tif$", full.names = TRUE)
 
-# load all classified rasters
+# list all classified tif files (FIXED: was classified_dir)
+classified_files <- list.files(out_dir, pattern = "\\.tif$", full.names = TRUE)
+
+# Check if files exist
+if(length(classified_files) == 0) {
+  stop("No classified .tif files found in ", out_dir)
+}
+
+# load all classified rasters (consider memory usage)
+message("Loading ", length(classified_files), " classified rasters...")
 classified_rasters <- lapply(classified_files, rast)
 
 # mosaic them together
 # do.call with terra::mosaic combines all rasters
+message("Creating mosaic...")
 mosaic_raster <- do.call(mosaic, c(classified_rasters, fun = "max"))
 
 # save the mosaic
 mosaic_outfile <- "~/Desktop/marshbirdsoutput/mosaic_classified.tif"
 writeRaster(mosaic_raster, mosaic_outfile, overwrite = TRUE)
+message("Mosaic saved to: ", mosaic_outfile)
 
-# Define custom colors
+# Define custom colors (MOVED: was after plot)
 colors <- c(
   "#a6d96a",  # hm  
   "#1a9641",  # lm  
@@ -173,31 +192,47 @@ colors <- c(
   "#762a83"   # up  
 )
 
+# Plot with colors (FIXED: was classified, now mosaic_raster)
+plot(mosaic_raster, col = colors, main = "Classified Mosaic")
 
+# save the output tif (FIXED: was classified, now mosaic_raster)
+writeRaster(mosaic_raster, "~/Desktop/marshbirdsoutput/round_6/classified_output.tif", overwrite = TRUE)
 
-# Plot with colors
-plot(classified, col = colors)
+# Show random forest importance
+print("Random Forest Variable Importance:")
+print(rf_model$importance)
 
-# save the output tif
-writeRaster(classified, "~/Desktop/marshbirdsoutput/round_6/classified_output.tif", overwrite = TRUE)
-
-rf_model$importance
-
-ggplot(training_data, aes(x = PCA3, y = PCA1, color = class)) +
+# Visualizations
+# PCA scatter plot
+p1 <- ggplot(training_data, aes(x = PCA3, y = PCA1, color = class)) +
   geom_point(alpha = 0.3) +
-  theme_minimal()
+  theme_minimal() +
+  labs(title = "PCA Components: Classes in Feature Space")
 
-ggplot(training_data, aes(x = PCA1, fill = class)) +
+print(p1)
+
+# PCA density plot
+p2 <- ggplot(training_data, aes(x = PCA1, fill = class)) +
   geom_density(alpha = 0.4, color = NA) +
-  theme_minimal()
+  theme_minimal() +
+  labs(title = "PCA1 Distribution by Class")
 
+print(p2)
+
+# Variable importance plot
 imp <- as.data.frame(rf_model$importance)
 imp$feature <- rownames(imp)
 
-ggplot(imp, aes(x = reorder(feature, MeanDecreaseGini), y = MeanDecreaseGini)) +
+p3 <- ggplot(imp, aes(x = reorder(feature, MeanDecreaseGini), y = MeanDecreaseGini)) +
   geom_col(fill = "steelblue") +
   coord_flip() +
   labs(title = "Random Forest Variable Importance",
        x = "Feature", y = "Mean Decrease Gini") +
   theme_minimal()
 
+print(p3)
+
+# Clean up memory
+rm(classified_rasters)
+gc()
+message("Analysis complete!")
