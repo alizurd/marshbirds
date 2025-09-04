@@ -693,25 +693,59 @@ dir.create(out_dir, showWarnings = FALSE)
 for (tile in tile_files) {
   message("Processing: ", tile)
   
-pca_pred <- terra::predict(all_for_pca_pred, pca_pixels, index = 1:5)
-base::names(pca_pred) <- paste0("PCA", 1:5)
-
-# match training stack
-prediction_stack <- pca_pred
-base::names(prediction_stack) <- base::names(r_stack)
-
-outfile <- base::gsub("\\.tif$", "_classified.tif", tile)
-print(outfile)
-
-classified <- terra::predict(
-  prediction_stack, rf_model,
-  na.rm = TRUE,
-  filename = outfile,
-  overwrite = TRUE
-)
+  # load subset tile
+  prediction_raster <- rast(tile)
+  names(prediction_raster) <- paste0("naip", 1:4)
+  
+  # compute ONLY what you used in training
+  ndvi_tile <- (prediction_raster[[4]] - prediction_raster[[1]]) / 
+               (prediction_raster[[4]] + prediction_raster[[1]])
+  names(ndvi_tile) <- "ndvi"
+  
+  # Match training exactly - only naip + ndvi
+  all_for_pca_pred <- c(prediction_raster, ndvi_tile)
+  names(all_for_pca_pred) <- names(all_for_pca)
+  
+  # PCA transform
+  pca_pred <- terra::predict(all_for_pca_pred, pca_pixels, index = 1:5)
+  names(pca_pred) <- paste0("PCA", 1:5)
+  
+  # match training stack
+  prediction_stack <- pca_pred
+  names(prediction_stack) <- names(r_stack)
+  
+  # output filename
+  outfile <- file.path(
+    out_dir,
+    paste0(tools::file_path_sans_ext(basename(tile)), "_classified.tif")
+  )
+  
+  # classify and save
+  classified <- terra::predict(
+    prediction_stack, rf_model,
+    na.rm = TRUE,
+    filename = outfile,
+    overwrite = TRUE
+  )
   
   plot(classified, col = colors, main = basename(tile))
 }
+
+
+# list all classified tif files
+classified_files <- list.files(classified_dir, pattern = "\\.tif$", full.names = TRUE)
+
+# load all classified rasters
+classified_rasters <- lapply(classified_files, rast)
+
+# mosaic them together
+# do.call with terra::mosaic combines all rasters
+mosaic_raster <- do.call(mosaic, c(classified_rasters, fun = "max"))
+
+# save the mosaic
+mosaic_outfile <- "~/Desktop/marshbirdsoutput/mosaic_classified.tif"
+writeRaster(mosaic_raster, mosaic_outfile, overwrite = TRUE)
+
 
 ```
 
