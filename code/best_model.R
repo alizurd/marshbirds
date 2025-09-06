@@ -8,11 +8,11 @@ library(ggplot2)
 library(tinytex)
 library(xfun)
 
-setwd("/Users/alyssabueno/Desktop/marshbirdsoutput/round_6")
+setwd("/Users/alyssabueno/Desktop/marshbirdsoutput/round_7")
 
 # load raster and training polygons
-naip <- rast("training_raster_round_6.tif") # this has the raster data    
-training_polygons <- vect("training_polygons_round_6.shp") # this has the classes
+naip <- rast("training_raster_round_7.tif") # this has the raster data    
+training_polygons <- vect("training_polygons_all.shp") # this has the classes
 
 names(naip) <- paste0("naip", 1:4) # change name of naip bands layer
 
@@ -181,7 +181,7 @@ mosaic_outfile <- "~/Desktop/marshbirdsoutput/mosaic_classified.tif"
 writeRaster(mosaic_raster, mosaic_outfile, overwrite = TRUE)
 message("Mosaic saved to: ", mosaic_outfile)
 
-# Define custom colors (MOVED: was after plot)
+# Define custom colors 
 colors <- c(
   "#a6d96a",  # hm  
   "#1a9641",  # lm  
@@ -236,3 +236,9 @@ print(p3)
 rm(classified_rasters)
 gc()
 message("Analysis complete!")
+
+----------------------------------------------------------------------------------------------------------
+  (1) after this, make sure you get the class percentages of the plots and add it to a csv
+  (2) figure out how to add the point_id 
+  (possibly have it updated in the prediction_polygons), then join it to raster data? idk figure it out
+-----------------------------------------------------------------------------------------------------------
