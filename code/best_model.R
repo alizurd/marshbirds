@@ -20,14 +20,6 @@ names(naip) <- paste0("naip", 1:4) # change name of naip bands layer
 ndvi <- (naip[[4]] - naip[[1]]) / (naip[[4]] + naip[[1]])
 names(ndvi) <- "ndvi"
 
-# calculate brightness
-brightness <- (naip[[1]] + naip[[2]] + naip[[3]] + naip[[4]]) / 4
-names(brightness) <- "brightness"
-
-# calculate ndwi
-ndwi <- (naip[[4]] - naip[[2]]) / (naip[[4]] + naip[[2]])
-names(ndwi) <- "ndwi"
-
 # now create the PCA 
 
 all_for_pca <- c(naip, ndvi)  # add ndvi to the raster
@@ -57,10 +49,10 @@ extracted <- extracted %>%
 # clean data by removing rows with na values and remove ID column
 extracted_clean <- na.omit(extracted[, -1])  # remove ID and NAs
 
-# sample 2000 per class
+# sample 4000 per class
 training_data <- extracted_clean %>%
   group_by(class) %>%
-  sample_n(min(2000, n())) %>%  # Use min() to handle small classes
+  sample_n(min(4000, n())) %>%  # Use min() to handle small classes
   ungroup()
 
 # turn class column into factor
@@ -101,7 +93,8 @@ class_colors <- c(
   "ow" = "#3288bd",  # open water
   "ph" = "#fdae61",  # phragmites
   "rd" = "#969696",  # road
-  "up" = "#762a83"   # upland
+  "up" = "#762a83",   # upland
+  "sd" = "#cdae65" # sand
 )
 
 # define color paletter
@@ -158,8 +151,11 @@ for (tile in tile_files) {
   })
 }
 
+# Show random forest importance
+print("Random Forest Variable Importance:")
+print(rf_model$importance)
 
-# list all classified tif files (FIXED: was classified_dir)
+# list all classified tif files 
 classified_files <- list.files(out_dir, pattern = "\\.tif$", full.names = TRUE)
 
 # Check if files exist
@@ -167,78 +163,109 @@ if(length(classified_files) == 0) {
   stop("No classified .tif files found in ", out_dir)
 }
 
-# load all classified rasters (consider memory usage)
-message("Loading ", length(classified_files), " classified rasters...")
-classified_rasters <- lapply(classified_files, rast)
+# Uncomment below if you want to create a mosaic for visualization
+# message("Loading ", length(classified_files), " classified rasters...")
+# classified_rasters <- lapply(classified_files, rast)
+# 
+# message("Creating mosaic...")
+# mosaic_raster <- do.call(mosaic, c(classified_rasters, fun = "modal"))  # use modal for categorical data
+# mosaic_outfile <- "~/Desktop/marshbirdsoutput/mosaic_classified.tif"
+# writeRaster(mosaic_raster, mosaic_outfile, overwrite = TRUE)
+# message("Mosaic saved to: ", mosaic_outfile)
+# 
+# # Plot mosaic
+# plot(mosaic_raster, col = class_colors, main = "Classified Mosaic")
+# 
+# # Clean up memory
+# rm(classified_rasters, mosaic_raster)
+# gc()
 
-# mosaic them together
-# do.call with terra::mosaic combines all rasters
-message("Creating mosaic...")
-mosaic_raster <- do.call(mosaic, c(classified_rasters, fun = "max"))
+message("Classification complete!")
 
-# save the mosaic
-mosaic_outfile <- "~/Desktop/marshbirdsoutput/mosaic_classified.tif"
-writeRaster(mosaic_raster, mosaic_outfile, overwrite = TRUE)
-message("Mosaic saved to: ", mosaic_outfile)
+# -------------------------------------------------------------------
+# calculating class percentages in each plot
+# -------------------------------------------------------------------
 
-# Define custom colors 
-colors <- c(
-  "#a6d96a",  # hm  
-  "#1a9641",  # lm  
-  "#8c510a",  # md  
-  "#3288bd",  # ow  
-  "#fdae61",  # ph  
-  "#969696",  # rd  
-  "#762a83"   # up  
+# load shp first
+plots <- st_read("~/Desktop/marshbirdsoutput/round_7/200m_buffer.shp") 
+
+# create a lookup table with ID and Name before converting to terra
+plot_lookup <- plots %>%
+  st_drop_geometry() %>%  # remove geometry to create simple dataframe
+  mutate(ID = row_number()) %>%  # create ID to match terra::extract output
+  select(ID, Name)  # keep ID and Name columns
+
+# convert to terra format for extract()
+plots_terra <- vect(plots)
+
+# initialize empty list to store results from each tile
+all_extractions <- list()
+
+# extract from each classified tile (memory efficient approach)
+for(i in seq_along(classified_files)) {
+  message("Extracting from tile ", i, " of ", length(classified_files), ": ", basename(classified_files[i]))
+  
+  tryCatch({
+    # load one tile at a time
+    tile_raster <- rast(classified_files[i])
+    
+    # extract values for plots that intersect this tile
+    extracted_values <- terra::extract(tile_raster, plots_terra, df = TRUE)
+    
+    # rename the classification column to 'class' (it might be named differently)
+    names(extracted_values)[2] <- "class"
+    
+    # only keep rows that actually have data (removes plots that don't intersect this tile)
+    extracted_values <- extracted_values[!is.na(extracted_values$class), ]
+    
+    if(nrow(extracted_values) > 0) {
+      all_extractions[[i]] <- extracted_values
+    }
+    
+    # clean up memory
+    rm(tile_raster)
+    gc()
+    
+  }, error = function(e) {
+    message("Error extracting from ", basename(classified_files[i]), ": ", e$message)
+  })
+}
+
+# combine all extractions
+all_values <- do.call(rbind, all_extractions)
+
+# create class mapping (adjust these numbers to match your actual class codes)
+class_mapping <- data.frame(
+  class_code = c(1, 2, 3, 4, 5, 6, 7, 8),  # numerical codes from raster
+  class_name = c("hm", "lm", "md", "ow", "ph", "rd", "up", "sd")  # corresponding class names
 )
 
-# Plot with colors (FIXED: was classified, now mosaic_raster)
-plot(mosaic_raster, col = colors, main = "Classified Mosaic")
+# map numerical codes to class names
+all_values <- all_values %>%
+  left_join(class_mapping, by = c("class" = "class_code")) %>%
+  select(-class) %>%  # remove numerical class column
+  rename(class = class_name)  # rename class_name to class
 
-# save the output tif (FIXED: was classified, now mosaic_raster)
-writeRaster(mosaic_raster, "~/Desktop/marshbirdsoutput/round_6/classified_output.tif", overwrite = TRUE)
+# calculate percent cover per plot
+percents <- all_values %>%
+  group_by(ID, class) %>%
+  summarize(pixel_count = n(), .groups = "drop") %>%
+  group_by(ID) %>%
+  mutate(percent = pixel_count / sum(pixel_count)) %>%
+  ungroup()
 
-# Show random forest importance
-print("Random Forest Variable Importance:")
-print(rf_model$importance)
+# join with plot names
+percents_with_names <- percents %>%
+  left_join(plot_lookup, by = "ID")
 
-# Visualizations
-# PCA scatter plot
-p1 <- ggplot(training_data, aes(x = PCA3, y = PCA1, color = class)) +
-  geom_point(alpha = 0.3) +
-  theme_minimal() +
-  labs(title = "PCA Components: Classes in Feature Space")
+# pivot to wide format
+percent_cover <- percents_with_names %>%
+  select(ID, Name, class, percent) %>%
+  pivot_wider(names_from = class, values_from = percent, values_fill = 0) %>%
+  rename(plot_id = ID, plot_name = Name) %>%
+  mutate(across(where(is.numeric), \(x) round(x, 2))) %>%
+  relocate(plot_id, plot_name)  # put ID and Name columns first
 
-print(p1)
+# save to CSV
+write.csv(percent_cover, "~/Desktop/marshbirdsoutput/round_7/percent_cover_by_plot.csv", row.names = FALSE)
 
-# PCA density plot
-p2 <- ggplot(training_data, aes(x = PCA1, fill = class)) +
-  geom_density(alpha = 0.4, color = NA) +
-  theme_minimal() +
-  labs(title = "PCA1 Distribution by Class")
-
-print(p2)
-
-# Variable importance plot
-imp <- as.data.frame(rf_model$importance)
-imp$feature <- rownames(imp)
-
-p3 <- ggplot(imp, aes(x = reorder(feature, MeanDecreaseGini), y = MeanDecreaseGini)) +
-  geom_col(fill = "steelblue") +
-  coord_flip() +
-  labs(title = "Random Forest Variable Importance",
-       x = "Feature", y = "Mean Decrease Gini") +
-  theme_minimal()
-
-print(p3)
-
-# Clean up memory
-rm(classified_rasters)
-gc()
-message("Analysis complete!")
-
-----------------------------------------------------------------------------------------------------------
-  (1) after this, make sure you get the class percentages of the plots and add it to a csv
-  (2) figure out how to add the point_id 
-  (possibly have it updated in the prediction_polygons), then join it to raster data? idk figure it out
------------------------------------------------------------------------------------------------------------
