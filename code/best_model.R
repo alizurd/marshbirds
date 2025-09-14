@@ -163,25 +163,6 @@ if(length(classified_files) == 0) {
   stop("No classified .tif files found in ", out_dir)
 }
 
-# Uncomment below if you want to create a mosaic for visualization
-# message("Loading ", length(classified_files), " classified rasters...")
-# classified_rasters <- lapply(classified_files, rast)
-# 
-# message("Creating mosaic...")
-# mosaic_raster <- do.call(mosaic, c(classified_rasters, fun = "modal"))  # use modal for categorical data
-# mosaic_outfile <- "~/Desktop/marshbirdsoutput/mosaic_classified.tif"
-# writeRaster(mosaic_raster, mosaic_outfile, overwrite = TRUE)
-# message("Mosaic saved to: ", mosaic_outfile)
-# 
-# # Plot mosaic
-# plot(mosaic_raster, col = class_colors, main = "Classified Mosaic")
-# 
-# # Clean up memory
-# rm(classified_rasters, mosaic_raster)
-# gc()
-
-message("Classification complete!")
-
 # -------------------------------------------------------------------
 # calculating class percentages in each plot
 # -------------------------------------------------------------------
