@@ -109,12 +109,11 @@ for (tile in tile_files) {
     prediction_raster <- rast(tile)
     names(prediction_raster) <- paste0("naip", 1:4)
     
-    # compute ONLY what you used in training
+    # compute what was used in training
     ndvi_tile <- (prediction_raster[[4]] - prediction_raster[[1]]) / 
       (prediction_raster[[4]] + prediction_raster[[1]])
     names(ndvi_tile) <- "ndvi"
     
-    # Match training exactly - only naip + ndvi
     all_for_pca_pred <- c(prediction_raster, ndvi_tile)
     names(all_for_pca_pred) <- names(all_for_pca)
     
@@ -126,13 +125,11 @@ for (tile in tile_files) {
     prediction_stack <- pca_pred
     names(prediction_stack) <- names(r_stack)
     
-    # output filename
     outfile <- file.path(
       out_dir,
       paste0(tools::file_path_sans_ext(basename(tile)), "_classified.tif")
     )
     
-    # classify and save
     classified <- terra::predict(
       prediction_stack, rf_model,
       na.rm = TRUE,
@@ -151,14 +148,14 @@ for (tile in tile_files) {
   })
 }
 
-# Show random forest importance
+# print random forest importance
 print("Random Forest Variable Importance:")
 print(rf_model$importance)
 
 # list all classified tif files 
 classified_files <- list.files(out_dir, pattern = "\\.tif$", full.names = TRUE)
 
-# Check if files exist
+# check if files exist
 if(length(classified_files) == 0) {
   stop("No classified .tif files found in ", out_dir)
 }
