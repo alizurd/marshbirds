@@ -212,17 +212,19 @@ for(i in seq_along(classified_files)) {
 # combine all extractions
 all_values <- do.call(rbind, all_extractions)
 
-# create class mapping (adjust these numbers to match your actual class codes)
+# create class mapping
 class_mapping <- data.frame(
   class_code = c(1, 2, 3, 4, 5, 6, 7, 8),  # numerical codes from raster
-  class_name = c("hm", "lm", "md", "ow", "ph", "rd", "up", "sd")  # corresponding class names
+  class_name = c("hm", "lm", "ow", "ph", "rd", "up", "md", "sd")  # corresponding class names
 )
 
 # map numerical codes to class names
+
 all_values <- all_values %>%
+  mutate(class = as.numeric(class)) %>%  # convert factor to its underlying numeric level
   left_join(class_mapping, by = c("class" = "class_code")) %>%
-  select(-class) %>%  # remove numerical class column
-  rename(class = class_name)  # rename class_name to class
+  select(-class) %>%
+  rename(class = class_name)
 
 # calculate percent cover per plot
 percents <- all_values %>%

@@ -1,10 +1,9 @@
 library(janitor)
 library(dplyr)
 
-setwd("~/Desktop/marshbirdsoutput/round_7")
+setwd("~/Desktop/marshbirdsoutput/round_8")
 richness <- read.csv("richness.csv")
 richness <- clean_names(richness)
-View(richness)
 
 # --------------------
 #   richness model
