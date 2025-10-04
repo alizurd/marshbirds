@@ -149,7 +149,7 @@ data.msom <- list(y = new_df,
                   det.covs = det_covs)
 
 # build the model
-out.msom <- spMsPGOcc(occ_formula = ~ occ.covs), 
+out.msom <- MsPGOcc(occ_formula = ~ occ.covs), 
                       det_formula = ~ det.covs, 
                       data = data.msom,
                       n.batch = 10, 
