@@ -124,6 +124,18 @@ for (j in 1:J) {
 # adding in the covariates
 # -----------------------------------------
 
+# group site level covariates
+occ_covs <- hab_data %>%
+  select(point_id, hm, lm, rd, up, ph) %>%
+  distinct()
+
+# group survey level covariates
+# figure out a way to bring in all these other det covariates
+det_covs <- species_data %>%
+  select(point_id, visit_num, survey_date, observer, tide, 
+         survey_time, temp_f, sky, wind_sp, noise) %>%
+  distinct()
+
 # detection covariates
 det_covs <- list(day = date,
                  time_of_day = time)
@@ -131,9 +143,19 @@ det_covs <- list(day = date,
 str(det_covs)
 
 # survey covariates aka habitat data
+# data into list object
+data.msom <- list(y = new_df, 
+                  occ_covs = occ_covs, 
+                  det_covs = det_covs)
 
-hab_data <- habitat_perc_cover %>%
-  select(point_id, hm, lm, md, ow, ph, rd, sd, ph, up)
-
-hab <- hab_data$hm[,1]
+# build the model
+out.msom <- spMsPGOcc(occ_formula = ~ scale(elev) + I(scale(elev)^2), 
+                      det_formula = ~ scale(date) + scale(time_of_day), 
+                      data = data.msom,
+                      n.batch = 10, 
+                      batch.length = 25, 
+                      cov.model = 'exponential', 
+                      NNGP = TRUE, 
+                      verbose = FALSE) 
+summary(out.msom, level = 'community')
 
