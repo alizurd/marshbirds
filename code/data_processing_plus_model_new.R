@@ -145,12 +145,12 @@ str(det_covs)
 # survey covariates aka habitat data
 # data into list object
 data.msom <- list(y = new_df, 
-                  occ_covs = occ_covs, 
-                  det_covs = det_covs)
+                  occ.covs = occ_covs, 
+                  det.covs = det_covs)
 
 # build the model
-out.msom <- spMsPGOcc(occ_formula = ~ scale(elev) + I(scale(elev)^2), 
-                      det_formula = ~ scale(date) + scale(time_of_day), 
+out.msom <- spMsPGOcc(occ_formula = ~ occ.covs), 
+                      det_formula = ~ det.covs, 
                       data = data.msom,
                       n.batch = 10, 
                       batch.length = 25, 
