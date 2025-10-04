@@ -111,9 +111,9 @@ create_detection_array <- function(data) {
   
   # Initialize array: species x sites x visits
   y_array <- array(
-    NA, 
-    dim = c(length(species), length(sites), length(visits)),
-    dimnames = list(species = species, site = sites, visit = visits)
+    NA, # creates an empty 3d array to fill with values
+    dim = c(length(species), length(sites), length(visits)), #arranges the dimensions
+    dimnames = list(species = species, site = sites, visit = visits) # adds labels
   )
   
   # Fill array
