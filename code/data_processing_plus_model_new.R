@@ -7,9 +7,7 @@ library(tidyr)
 # importing data
 # ---------------------------------------------
 
-# import data
-habitat_perc_cover <- read.csv("~/Desktop/sharp_data/percent_cover_by_plot.csv")
-
+# import species data
 years <- 2011:2014
 sharp_files <- sprintf("~/Desktop/sharp_data/working_data/SHARP_surveyData_%d.csv", years)
 
