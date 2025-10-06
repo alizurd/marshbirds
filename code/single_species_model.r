@@ -37,33 +37,6 @@ full_data_raw <- lapply(sharp_files, function(file) {
 full_data_raw$survey_date <- ymd(full_data_raw$survey_date)
 # class(full_data_raw$survey_date)
 
-# time must be converted to integer
-# full_data_raw_time <- full_data_raw %>% # first convert the data into hh:mm, then continue onto integer
-#   separate(survey_time, into = c("hour", "minute"), sep = ":", convert = TRUE) %>%
-#   mutate(survey_time = sprintf("%02d:%02d", hour, minute)) %>%
-#   select(-hour, -minute)
-# 
-# class(full_data_raw$survey_time)
-# full_data_raw_time_new$survey_time <- as.integer(full_data_raw_time$survey_time)
-
-# convert time into minutes since midnight and convert date into julian date
-# date_time_fix <- full_data_raw %>%
-#   mutate(
-#     date = yday(survey_date), # convert to julian
-#     time = period_to_seconds(hm(survey_time)) / 60, # minutes since midnight
-#     total_count_n = as.numeric(total_count_n)
-#   ) %>%
-#   group_by(point_id, visit_num, date, time, alpha_code, year) %>%
-#   summarise(
-#     across(
-#       c(patch_id, survey_window, observer, tide, temp_f, wind_sp, sky, noise, state),
-#       ~ first(.x), # take the first value within group
-#       .names = "{.col}"
-#     ),
-#     count = sum(total_count_n, na.rm = TRUE), # sum the count of individuals
-#     .groups = "drop"
-#   )
-
 # just converting just the time here, not the date
 date_time_fix <- full_data_raw %>%
   mutate(
@@ -105,10 +78,24 @@ full_data <- ny_bird_data %>%
   filter(!is.na(hm)) 
 
 # ----------------------------------------------------------------------
+# filter out the sites that don't have any survey data
+# ----------------------------------------------------------------------
+
+#filter for sites that are not completely NA
+points_with_data <- full_data %>%
+  group_by(point_id) %>%
+  summarise(contains_data = any(!is.na(presence)), .groups = 'drop') %>% # will return a single true if any observation is not NA
+  filter(contains_data) %>%
+  pull(point_id)
+
+full_data_clean <- full_data %>%
+  filter(point_id %in% points_with_data)
+
+# ----------------------------------------------------------------------
 # Create detection array function
 # ----------------------------------------------------------------------
 create_detection_array <- function(data) {
-  species <- sort(unique(data$alpha_code))  # Use 'data' not 'full_data'
+  species <- sort(unique(data$alpha_code))  
   sites <- sort(unique(data$point_id))
   dates <- sort(unique(data$survey_date))
   
@@ -121,7 +108,7 @@ create_detection_array <- function(data) {
   for (i in seq_len(nrow(data))) {
     species_idx <- match(data$alpha_code[i], species)
     site_idx <- match(data$point_id[i], sites)
-    date_idx <- match(data$survey_date[i], dates)  # FIXED: was site_idx
+    date_idx <- match(data$survey_date[i], dates)  
     
     y_array[species_idx, site_idx, date_idx] <- data$presence[i]
   }
@@ -133,7 +120,7 @@ create_detection_array <- function(data) {
 # Create detection covariate matrix function
 # ----------------------------------------------------------------------
 create_det_matrix <- function(data, covariate_name) {
-  sites <- sort(unique(data$point_id))  # Use 'data' not 'full_data'
+  sites <- sort(unique(data$point_id)) 
   dates <- sort(unique(data$survey_date))
   
   det_matrix <- matrix(
@@ -156,9 +143,8 @@ create_det_matrix <- function(data, covariate_name) {
     }
     
     det_matrix[site_idx, date_idx] <- value
-  }  # FIXED: closing brace here
+  }  
   
-  # FIXED: These lines outside the loop
   overall_mean <- mean(det_matrix, na.rm = TRUE)
   det_matrix[is.na(det_matrix)] <- overall_mean
   
@@ -166,65 +152,48 @@ create_det_matrix <- function(data, covariate_name) {
 }
 
 # ----------------------------------------------------------------------
-# Create arrays and matrices - DO THIS FIRST
+# Create arrays and matrices 
 # ----------------------------------------------------------------------
-y_array <- create_detection_array(full_data)
+y_array <- create_detection_array(full_data_clean)
 
 # Site covariates
-occ_covs <- full_data %>%
+occ_covs <- full_data_clean %>%
   select(point_id, hm, lm, rd, up, ph) %>%
   distinct() %>%
   arrange(point_id) %>%
   select(-point_id)
 
 # Detection covariates
-det_covs_list <- list(
-  temp = create_det_matrix(full_data, "temp_f"),
-  time = create_det_matrix(full_data, "time"),
-  wind = create_det_matrix(full_data, "wind_sp")
+det_covs <- list(
+  temp = create_det_matrix(full_data_clean, "temp_f"),
+  time = create_det_matrix(full_data_clean, "time"),
+  wind = create_det_matrix(full_data_clean, "wind_sp"),
+  noise = create_det_matrix(full_data_clean, "noise")
 )
 
-# ----------------------------------------------------------------------
-# Filter to sites with data
-# ----------------------------------------------------------------------
-sites_with_data <- apply(y_array, 2, function(site_data) {
-  any(!is.na(site_data))
-})
-
-cat("Sites with data:", sum(sites_with_data), "out of", length(sites_with_data), "\n")
-
-y_array_filtered <- y_array[, sites_with_data, ]
-sites_kept <- dimnames(y_array_filtered)$site
-
-occ_covs_filtered <- occ_covs[sites_with_data, ]
-
-det_covs_filtered <- list(
-  temp = det_covs_list$temp[sites_with_data, ],
-  time = det_covs_list$time[sites_with_data, ],
-  wind = det_covs_list$wind[sites_with_data, ]
-)
 
 # Run single-species models
 for (sp in 1:3) {
-  species_name <- dimnames(y_array_filtered)$species[sp]
+  species_name <- dimnames(y_array)$species[sp]
   
   # Get data for this species only
-  y_single <- y_array_filtered[sp, , ]
+  y <- y_array[sp, , ]
   
   # Remove sites with no observations for THIS species
-  sites_observed <- apply(y_single, 1, function(x) any(!is.na(x)))
+  sites_observed <- apply(y, 1, function(x) any(!is.na(x)))
   
-  data_single <- list(
-    y = y_single[sites_observed, ],
-    occ.covs = occ_covs_filtered[sites_observed, ],
-    det.covs = lapply(det_covs_filtered, function(x) x[sites_observed, ])
+  data_filtered <- list(
+    y = y[sites_observed, ],
+    occ.covs = occ_covs[sites_observed, ],
+    det.covs = lapply(det_covs, function(x) x[sites_observed, ])
   )
   
+  
   # Run model
-  out <- PGOcc(  # Note: PGOcc for single species, not msPGOcc
+  out <- PGOcc(  
     occ.formula = ~ hm + lm + rd + up + ph,
-    det.formula = ~ temp + time + wind,
-    data = data_single,
+    det.formula = ~ temp + noise + wind,
+    data = data_filtered,
     n.samples = 20000,
     n.burn = 10000,
     n.thin = 10,
