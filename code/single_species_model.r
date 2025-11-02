@@ -9,8 +9,11 @@ library(lubridate)
 # ---------------------------------------------
 
 # import species data
-years <- 2011:2014
-sharp_files <- sprintf("~/Desktop/sharp_data/working_data/SHARP_surveyData_%d.csv", years)
+# years <- 2011:2014
+# sharp_files <- sprintf("~/Desktop/sharp_data/working_data/SHARP_surveyData_%d.csv", years)
+sharp_files <- read.csv("~/Desktop/NY_SHARP Survey Data Master File 2011-2024 - Copy of NY_SHARP Survey Data Master File 2011-2024 (1).csv")
+sharp_files <- clean_names(sharp_files)
+View(sharp_files)
 
 # import habitat data
 hab_data <- habitat_perc_cover <- read.csv("~/Desktop/sharp_data/percent_cover_by_plot.csv")
@@ -57,8 +60,8 @@ date_time_fix <- full_data_raw %>%
 
 # check to see what's causing the na coercion
 # full_data_raw %>%
-#   filter(!grepl("^[0-9.]+$", total_count_n)) %>%
-#   distinct(total_count_n)
+  filter(!grepl("^[0-9.]+$", total_count_n)) %>%
+  distinct(total_count_n)
 
 # ---------------------------------------------
 # filtering data to state and species of interest
@@ -176,6 +179,10 @@ det_covs <- list(
 for (sp in 1:3) {
   species_name <- dimnames(y_array)$species[sp]
   
+  cat("\n========================================\n")
+  cat("Running model for species:", species_name, "\n")
+  cat("========================================\n\n")
+  
   # Get data for this species only
   y <- y_array[sp, , ]
   
@@ -202,6 +209,15 @@ for (sp in 1:3) {
   )
   
   assign(paste0("out_", species_name), out)
+  
 }
 
-summary(out)
+# summarize each species 
+cat("\n======== CLRA RESULTS ========\n")
+summary(out_CLRA)
+
+cat("\n======== SALS RESULTS ========\n")
+summary(out_SALS)
+
+cat("\n======== SESP RESULTS ========\n")
+summary(out_SESP)

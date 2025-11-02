@@ -42,7 +42,7 @@ training_polygons$class <- as.factor(training_polygons$class)
 poly_df <- as.data.frame(training_polygons)
 poly_df$ID <- 1:nrow(poly_df)  # Add ID column to match extract output
 
-# Join the class labels
+# Join the class labels -- might need to adjust this part since im removing the ID field from the shapefiles??
 extracted <- extracted %>%
   left_join(poly_df[, c("ID", "class")], by = "ID")
 
