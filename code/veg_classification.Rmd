@@ -21,7 +21,7 @@ This code outlines 4 different model classification iterations, each differing b
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-knitr::opts_knit$set(root.dir = "/Users/alyssabueno/Desktop/marshbirdsoutput/round_6")
+knitr::opts_knit$set(root.dir = "/Users/alyssabueno/Desktop/marshbirdsoutput/round_9")
 
 library(terra)
 library(randomForest)
@@ -40,8 +40,35 @@ library(xfun)
 ```{r}
 
 # load raster and training polygons
-naip <- rast("training_raster_round_6.tif") # this has the raster data    
-training_polygons <- vect("training_polygons_round_6.shp") # this has the classes
+
+# this has the raster data    
+raster_files <- c(
+  "/Users/alyssabueno/Desktop/marshbirds_data/clips/clip_bx.tif",
+  "/Users/alyssabueno/Desktop/marshbirds_data/clips/clip_li.tif",
+  "/Users/alyssabueno/Desktop/marshbirds_data/clips/clip_gb.tif"
+)
+
+# this has the classes
+shp_files <- c(
+  "/Users/alyssabueno/Desktop/marshbirds_data/training_polygons/training_polygons_bx.shp",
+  "/Users/alyssabueno/Desktop/marshbirds_data/training_polygons/training_polygons_li.shp",
+  "/Users/alyssabueno/Desktop/marshbirds_data/training_polygons/training_polygons_gb.shp"
+) 
+
+# load them up
+rasters <- lapply(raster_files, rast)
+polygons <- lapply(shp_files, vect)
+
+
+# -------------------------------
+#   raster extraction and calcs 
+# -------------------------------
+
+all_extracted <- list()
+
+for (i in 1:length(rasters)) {
+  naip <- rasters[[i]]
+  polygon <- polygons[[i]]
 
 names(naip) <- paste0("naip", 1:4) # change name of naip bands layer
 
@@ -66,35 +93,40 @@ pca_pixels <- prcomp(vals, center = TRUE, scale. = TRUE)
 pca <- predict(all_for_pca, pca_pixels, index = 1:5)  # for 5 PCs
 names(pca) <- paste0("PCA", 1:5)
 
-```
 
 # 1. First Iteration: NDWI + NDVI + PCA + NAIP + Brightness
 
-```{r}
 # stack em up
 r_stack <- c(ndwi, ndvi, pca, naip, brightness)
 
 # extract raster values for training polygons
-extracted <- terra::extract(r_stack, training_polygons, df = TRUE)
+extracted_i <- terra::extract(r_stack, polygon, df = TRUE)
 
-# turn class into a factor
-training_polygons$class <- as.factor(training_polygons$class)
-
-# Convert training_polygons to dataframe to get the class labels
-poly_df <- as.data.frame(training_polygons)
-poly_df$ID <- 1:nrow(poly_df)  # Add ID column to match extract output
+# turn class into a factor and add to extracted data
+polygon$class <- as.factor(polygon$class)
+poly_df <- as.data.frame(polygon)
+poly_df$ID <- 1:nrow(poly_df)
 
 # Join the class labels
-extracted <- extracted %>%
+extracted_i <- extracted_i %>%
   left_join(poly_df[, c("ID", "class")], by = "ID")
 
-# clean data by removing rows with na values and remove ID column
-extracted_clean <- na.omit(extracted[, -1])  # remove ID and NAs
+  all_extracted[[i]] <- extracted_i
+  
+  cat("Processed site", i, "\n")
+  
+}
+
+# Combine all sites
+extracted <- bind_rows(all_extracted)
+
+# clean data by removing rows with na values
+extracted_clean <- na.omit(extracted)  # remove NAs
 
 # sample 2000 per class
 training_data <- extracted_clean %>%
   group_by(class) %>%
-  sample_n(min(2000, n())) %>%  # Use min() to handle small classes
+  sample_n(min(3000, n())) %>%  # Use min() to handle small classes
   ungroup()
 
 # turn class column into factor
