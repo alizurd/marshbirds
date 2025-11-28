@@ -126,7 +126,7 @@ extracted_clean <- na.omit(extracted)  # remove NAs
 # sample 2000 per class
 training_data <- extracted_clean %>%
   group_by(class) %>%
-  sample_n(min(3000, n())) %>%  # Use min() to handle small classes
+  sample_n(min(2000, n())) %>%  # Use min() to handle small classes
   ungroup()
 
 # turn class column into factor

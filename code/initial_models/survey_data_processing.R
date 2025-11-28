@@ -22,6 +22,8 @@ full_data_raw <- lapply(sharp_files, function(file) {
 }) %>%
   bind_rows()
 
+write.csv(full_data_raw, file = "~/Desktop/sharp_full_data.csv")
+
 # change the time from hh:mm or h:mm to minutes
 full_data <- full_data_raw %>%
   mutate(minutes = sapply(survey_time, function(x) {
