@@ -102,18 +102,18 @@ r_stack <- c(ndwi, ndvi, pca, naip, brightness)
 # extract raster values for training polygons
 extracted_i <- terra::extract(r_stack, polygon, df = TRUE)
 
-# turn class into a factor and add to extracted data
-polygon$class <- as.factor(polygon$class)
-poly_df <- as.data.frame(polygon)
-poly_df$ID <- 1:nrow(poly_df)
+# extract raster values for training polygons
+extracted_i <- terra::extract(r_stack, polygon, df = TRUE)
 
-# Join the class labels
-extracted_i <- extracted_i %>%
-  left_join(poly_df[, c("ID", "class")], by = "ID")
+# Add class label using polygon index
+extracted_i$class <- polygon$class[extracted_i$ID]
 
-  all_extracted[[i]] <- extracted_i
-  
-  cat("Processed site", i, "\n")
+# remove ID because it should NOT go into model training
+extracted_i$ID <- NULL
+
+all_extracted[[i]] <- extracted_i
+
+cat("Processed site", i, "\n")
   
 }
 
@@ -164,59 +164,88 @@ confusionMatrix(preds, test_set$class)
 
 ```{r}
 # load the new, unlabeled raster
-setwd("~/Desktop/r_inputs")
-prediction_raster <- rast("~/Desktop/r_inputs/prediction_raster_other_boros.tif")
-
-# calculate NDVI for prediction raster
-ndvi_pred <- (prediction_raster[[4]] - prediction_raster[[1]]) / 
-  (prediction_raster[[4]] + prediction_raster[[1]])
-names(ndvi_pred) <- "ndvi"
-
-# calculation NDWI
-ndwi_pred <- (prediction_raster[[4]] - prediction_raster[[2]]) / 
-  (prediction_raster[[4]] + prediction_raster[[2]])
-names(ndwi_pred) <- "ndwi"
-
-# Calculate brightness
-brightness_pred <- (prediction_raster[[1]] + prediction_raster[[2]] + 
-                      prediction_raster[[3]] + prediction_raster[[4]]) / 4
-names(brightness_pred) <- "brightness"
-
-# Apply the pca
-all_for_pca_pred <- c(prediction_raster, ndvi_pred)
-names(all_for_pca_pred) <- names(all_for_pca)  # ensure exact match
-pca_pred <- predict(all_for_pca_pred, pca_pixels, index = 1:5)
-names(pca_pred) <- paste0("PCA", 1:5)
-
-# stack it
-prediction_stack <- c(prediction_raster, ndvi_pred, ndwi_pred, brightness_pred, pca_pred)
-
-# rename to match training names
-names(prediction_stack) <- names(r_stack)
-
-# apply the model to predict classes
-classified <- predict(prediction_stack, rf_model, na.rm = TRUE)
-
-# Define custom colors
-colors <- c(
-  "#a6d96a",  # hm  
-  "#1a9641",  # lm  
-  "#8c510a",  # md  
-  "#3288bd",  # ow  
-  "#fdae61",  # ph  
-  "#969696",  # rd  
-  "#762a83"   # up  
+setwd("~/Desktop/marshbirds_data")
+files <- c(
+  "~/Desktop/marshbirds_data/pred_clips/bellport_raster_200.tif",
+  "~/Desktop/marshbirds_data/pred_clips/bx_li_raster_200.tif",
+  "~/Desktop/marshbirds_data/pred_clips/dune_raster_200.tif",
+  "~/Desktop/marshbirds_data/pred_clips/e_montauk_raster_200.tif",
+  "~/Desktop/marshbirds_data/pred_clips/east_point_montauk_raster_200.tif",
+  "~/Desktop/marshbirds_data/pred_clips/east_queens_raster_200.tif",
+  "~/Desktop/marshbirds_data/pred_clips/eastern_end_montauk_raster_200.tif",
+  "~/Desktop/marshbirds_data/pred_clips/gardiner_raster_200.tif",
+  "~/Desktop/marshbirds_data/pred_clips/gilgo_raster_200.tif",
+  "~/Desktop/marshbirds_data/pred_clips/hecksher_raster_200.tif",
+  "~/Desktop/marshbirds_data/pred_clips/jones_raster_200.tif",
+  "~/Desktop/marshbirds_data/pred_clips/ne_li_raster_200.tif",
+  "~/Desktop/marshbirds_data/pred_clips/north_central_li_raster_200.tif",
+  "~/Desktop/marshbirds_data/pred_clips/nw_li_raster_200.tif",
+  "~/Desktop/marshbirds_data/pred_clips/nw_montauk_raster_200.tif",
+  "~/Desktop/marshbirds_data/pred_clips/queens_raster_200.tif",
+  "~/Desktop/marshbirds_data/pred_clips/s_central_li_raster_200.tif",
+  "~/Desktop/marshbirds_data/pred_clips/s_montauk_raster_200.tif",
+  "~/Desktop/marshbirds_data/pred_clips/sb_central_li_raster_200.tif",
+  "~/Desktop/marshbirds_data/pred_clips/si_raster_200.tif",
+  "~/Desktop/marshbirds_data/pred_clips/w_montauk_raster_200.tif"
 )
 
 
+# Custom output directory
+out_dir <- "~/Desktop/marshbirdsoutput/round_10/"
+dir.create(out_dir, showWarnings = FALSE)
 
-# Plot with colors
-plot(classified, col = colors)
 
-# save the output tif
-# writeRaster(classified, "~/Desktop/marshbirdsoutput/round_6/classified_output.tif", overwrite = TRUE)
+# -----------------------------
+# PROCESS EACH RASTER INDIVIDUALLY
+# -----------------------------
 
-rf_model$importance
+for (f in files) {
+
+  message("Processing: ", f)
+
+  r <- rast(f)
+
+  # --- Derived predictors ---
+  ndvi <- (r[[4]] - r[[1]]) / (r[[4]] + r[[1]])
+  names(ndvi) <- "ndvi"
+
+  ndwi <- (r[[4]] - r[[2]]) / (r[[4]] + r[[2]])
+  names(ndwi) <- "ndwi"
+
+  brightness <- (r[[1]] + r[[2]] + r[[3]] + r[[4]]) / 4
+  names(brightness) <- "brightness"
+
+  # PCA input (must match training)
+  all_for_pca_pred <- c(r, ndvi)
+  names(all_for_pca_pred) <- names(all_for_pca)
+
+  pca_pred <- predict(all_for_pca_pred, pca_pixels, index = 1:5)
+  names(pca_pred) <- paste0("PCA", 1:5)
+
+  # Final predictor stack
+  prediction_stack <- c(r, ndvi, ndwi, brightness, pca_pred)
+
+  # Make sure the names match training stack exactly
+  names(prediction_stack) <- names(r_stack)
+
+  # Predict classes
+  classified <- predict(prediction_stack, rf_model, na.rm = TRUE)
+
+  # Output file name
+  base <- tools::file_path_sans_ext(basename(f))
+  out_file <- file.path(out_dir, paste0(base, "_classified.tif"))
+
+  writeRaster(classified, out_file, overwrite = TRUE)
+
+  message("Saved: ", out_file)
+}
+
+message("ALL DONE ✔")
+```
+``` {r}
+
+print(rf_model)
+
 ```
 
 # feature class importance and visualizations
