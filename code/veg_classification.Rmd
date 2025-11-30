@@ -158,6 +158,9 @@ test_polygons <- lapply(test_shp_files, vect)
 # calculate PCA based on the same scale as the training data
 # pca_pixels <- prcomp(vals, center = TRUE, scale. = TRUE)
 
+# store r_stack for visualization later
+r_stacks <- list()
+
 test_extracted <- list()
 
 for (i in 1:length(test_rasters)) {
@@ -182,8 +185,11 @@ for (i in 1:length(test_rasters)) {
   pca <- predict(pca_input, pca_pixels, index = 1:5)
   names(pca) <- paste0("PCA", 1:5)
 
-  # --- stack identical predictors ---
+  # full predictor stack
   r_stack <- c(ndwi, ndvi, pca, naip, brightness)
+  
+  # store r_stack for later visualization
+  r_stacks[[i]] <- r_stack
 
   # --- extract ---
   extracted_i <- terra::extract(r_stack, polygon, df = TRUE)
@@ -238,22 +244,12 @@ confusionMatrix(preds, test_data$class)
 ```{r}
 # visualizing test plots
 
-library(terra)
-library(randomForest)
-
-# load test raster
-test_rast <- rast("/Users/alyssabueno/Desktop/marshbirds_data/test_clips/test_clips_bx.tif")   # change to li or gb as needed
-
-# make prediction raster
-pred_rast <- predict(test_rast, rf_model, type = "response")
-
-# plot it
-plot(pred_rast, col = c("forestgreen", "goldenrod", "steelblue", "firebrick"),
-     main = "Predicted Classes (BX Test Raster)")
+pred_bx <- predict(r_stacks[[1]], rf_model)
+plot(pred_bx)
 
 ```
 
-# classifying the plots
+# classifying the actual plots
 
 ```{r}
 # load the new, unlabeled raster
