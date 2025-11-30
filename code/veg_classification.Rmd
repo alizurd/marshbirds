@@ -138,26 +138,119 @@ print(table(training_data$class))
 ```
 
 ```{r}
-# split training and test data
-set.seed(342)
-idx <- sample(seq_len(nrow(training_data)), size = 0.8 * nrow(training_data))
-train_set <- training_data[idx, ]
-test_set  <- training_data[-idx, ]
 
-# train random forest model
+# ingest the test data
+test_raster_files <- c(
+  "/Users/alyssabueno/Desktop/marshbirds_data/test_clips/test_clips_bx.tif",
+  "/Users/alyssabueno/Desktop/marshbirds_data/test_clips/test_clips_li.tif",
+  "/Users/alyssabueno/Desktop/marshbirds_data/test_clips/test_clips_gb.tif"
+)
+
+test_shp_files <- c(
+  "/Users/alyssabueno/Desktop/marshbirds_data/test_polygons/test_polygons_bx.shp",
+  "/Users/alyssabueno/Desktop/marshbirds_data/test_polygons/test_polygons_li.shp",
+  "/Users/alyssabueno/Desktop/marshbirds_data/test_polygons/test_polygons_gb.shp"
+)
+
+test_rasters  <- lapply(test_raster_files, rast)
+test_polygons <- lapply(test_shp_files, vect)
+
+# calculate PCA based on the same scale as the training data
+# pca_pixels <- prcomp(vals, center = TRUE, scale. = TRUE)
+
+test_extracted <- list()
+
+for (i in 1:length(test_rasters)) {
+  naip <- test_rasters[[i]]
+  polygon <- test_polygons[[i]]
+
+  names(naip) <- paste0("naip", 1:4)
+
+  # --- match training calculations ---
+
+  ndvi <- (naip[[4]] - naip[[1]]) / (naip[[4]] + naip[[1]])
+  names(ndvi) <- "ndvi"
+
+  brightness <- (naip[[1]] + naip[[2]] + naip[[3]] + naip[[4]]) / 4
+  names(brightness) <- "brightness"
+
+  ndwi <- (naip[[4]] - naip[[2]]) / (naip[[4]] + naip[[2]])
+  names(ndwi) <- "ndwi"
+
+  # --- apply SAME PCA model as training ---
+  pca_input <- c(naip, ndvi)
+  pca <- predict(pca_input, pca_pixels, index = 1:5)
+  names(pca) <- paste0("PCA", 1:5)
+
+  # --- stack identical predictors ---
+  r_stack <- c(ndwi, ndvi, pca, naip, brightness)
+
+  # --- extract ---
+  extracted_i <- terra::extract(r_stack, polygon, df = TRUE)
+
+  # add class label
+  extracted_i$class <- polygon$class[extracted_i$ID]
+
+  # drop ID
+  extracted_i$ID <- NULL
+
+  test_extracted[[i]] <- extracted_i
+
+  cat("Processed TEST site", i, "\n")
+}
+
+# Combine all sites
+extracted_test <- bind_rows(test_extracted)
+
+# clean data by removing rows with na values
+extracted_test_clean <- na.omit(extracted_test)  # remove NAs
+
+# sample 2000 per class
+test_data <- extracted_test_clean 
+
+# %>%
+#   group_by(class) %>%
+#   sample_n(min(2000, n())) %>%  # Use min() to handle small classes
+#   ungroup()
+
+# turn class column into factor
+test_data$class <- factor(test_data$class)
+
+# check the sampling balance in the classes
+print(table(test_data$class))
+
+# train random forest model on training data
 rf_model <- randomForest(class ~ ., 
-                         data = train_set, 
+                         data = training_data, 
                          ntree = 500)
 
 # validation metrics
-preds <- predict(rf_model, newdata = test_set)
-accuracy <- mean(preds == test_set$class)
+preds <- predict(rf_model, newdata = test_data)
+accuracy <- mean(preds == test_data$class)
 cat("Accuracy:", round(accuracy, 4), "\n")
 
 print(rf_model)
 
 # confusion matrix
-confusionMatrix(preds, test_set$class)
+confusionMatrix(preds, test_data$class)
+```
+
+```{r}
+# visualizing test plots
+
+library(terra)
+library(randomForest)
+
+# load test raster
+test_rast <- rast("/Users/alyssabueno/Desktop/marshbirds_data/test_clips/test_clips_bx.tif")   # change to li or gb as needed
+
+# make prediction raster
+pred_rast <- predict(test_rast, rf_model, type = "response")
+
+# plot it
+plot(pred_rast, col = c("forestgreen", "goldenrod", "steelblue", "firebrick"),
+     main = "Predicted Classes (BX Test Raster)")
+
 ```
 
 # classifying the plots
@@ -191,7 +284,7 @@ files <- c(
 
 
 # Custom output directory
-out_dir <- "~/Desktop/marshbirdsoutput/round_10/"
+out_dir <- "~/Desktop/marshbirdsoutput/round_11/"
 dir.create(out_dir, showWarnings = FALSE)
 
 
@@ -251,23 +344,23 @@ print(rf_model)
 # feature class importance and visualizations
 
 ```{r}
-ggplot(training_data, aes(x = ndwi, y = ndvi, color = class)) +
-  geom_point(alpha = 0.3) +
-  theme_minimal()
-
-ggplot(training_data, aes(x = ndwi, fill = class)) +
-  geom_density(alpha = 0.4, color = NA) +
-  theme_minimal()
-
-imp <- as.data.frame(rf_model$importance)
-imp$feature <- rownames(imp)
-
-ggplot(imp, aes(x = reorder(feature, MeanDecreaseGini), y = MeanDecreaseGini)) +
-  geom_col(fill = "steelblue") +
-  coord_flip() +
-  labs(title = "Random Forest Variable Importance",
-       x = "Feature", y = "Mean Decrease Gini") +
-  theme_minimal()
+# ggplot(training_data, aes(x = ndwi, y = ndvi, color = class)) +
+#   geom_point(alpha = 0.3) +
+#   theme_minimal()
+# 
+# ggplot(training_data, aes(x = ndwi, fill = class)) +
+#   geom_density(alpha = 0.4, color = NA) +
+#   theme_minimal()
+# 
+# imp <- as.data.frame(rf_model$importance)
+# imp$feature <- rownames(imp)
+# 
+# ggplot(imp, aes(x = reorder(feature, MeanDecreaseGini), y = MeanDecreaseGini)) +
+#   geom_col(fill = "steelblue") +
+#   coord_flip() +
+#   labs(title = "Random Forest Variable Importance",
+#        x = "Feature", y = "Mean Decrease Gini") +
+#   theme_minimal()
 ```
 
 # 2. Second Iteration: NAIP + NDVI + NDWI
