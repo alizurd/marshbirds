@@ -93,9 +93,6 @@ pca_pixels <- prcomp(vals, center = TRUE, scale. = TRUE)
 pca <- predict(all_for_pca, pca_pixels, index = 1:5)  # for 5 PCs
 names(pca) <- paste0("PCA", 1:5)
 
-
-# 1. First Iteration: NDWI + NDVI + PCA + NAIP + Brightness
-
 # stack em up
 r_stack <- c(ndwi, ndvi, pca, naip, brightness)
 
@@ -363,7 +360,7 @@ print(rf_model)
 
 ```{r}
 # stack em up
-r_stack <- c(naip, ndvi, ndwi)
+r_stack <- c(r, ndvi, ndwi)
 
 # extract raster values for training polygons
 extracted <- terra::extract(r_stack, training_polygons, df = TRUE)

@@ -8,9 +8,18 @@ output:
       keep_tex: true
 ---
 
+## Saltmarsh Habitat Classification
+This code outlines 4 different model classification iterations, each differing by the input layers. 
+
+1. NDWI + NDVI + PCA + NAIP + Brightness
+2. NDWI + NDVI + PCA
+3. NAIP + NDVI
+4. NAIP only
+5. PCA only
+
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-knitr::opts_knit$set(root.dir = "/Users/alyssabueno/Desktop/marshbirdsoutput/round_12")
+knitr::opts_knit$set(root.dir = "/Users/alyssabueno/Desktop/marshbirdsoutput/round_12") # increase by 1 everytime you run a new model
 
 library(terra)
 library(randomForest)
@@ -24,34 +33,38 @@ library(ggplot2)
 # PART 1: Load and Process Training Data
 
 ```{r}
-# File paths
+
+# these are the training rasters
 raster_files <- c(
   "/Users/alyssabueno/Desktop/marshbirds_data/clips/clip_bx.tif",
   "/Users/alyssabueno/Desktop/marshbirds_data/clips/clip_li.tif",
   "/Users/alyssabueno/Desktop/marshbirds_data/clips/clip_gb.tif"
 )
 
+# these are the empty polygons with the class labels
 shp_files <- c(
   "/Users/alyssabueno/Desktop/marshbirds_data/training_polygons/training_polygons_bx.shp",
   "/Users/alyssabueno/Desktop/marshbirds_data/training_polygons/training_polygons_li.shp",
   "/Users/alyssabueno/Desktop/marshbirds_data/training_polygons/training_polygons_gb.shp"
 )
 
+# rasters and polygons are loaded and become a list 
 rasters <- lapply(raster_files, rast)
 polygons <- lapply(shp_files, vect)
 
 # -------------------------------
-# Extract from all training sites
+# Extract from all training plots
 # -------------------------------
 
+# this is an empty list to store the extracted training values
 all_extracted <- list()
-pca_model <- NULL  # tbd to store the PCA model
+pca_model <- NULL  # tbd empty placeholder to store the PCA model
 
-for (i in 1:length(rasters)) {
-  naip <- rasters[[i]]
-  polygon <- polygons[[i]]
+for (i in 1:length(rasters)) { # starting a loop over all rasters (rasters has 3 rasters, so i = 1,2,3)
+  naip <- rasters[[i]] # e.g. rasters[[1]] = bx, rasters[[2]] = li, rasters[[3]] = gb, temporarily stored in naip
+  polygon <- polygons[[i]] # same thing here, pull out the i-th polygon shapefile
   
-  names(naip) <- paste0("naip", 1:4)
+  names(naip) <- paste0("naip", 1:4) # rename the raster's bands; will become naip1, naip2, naip3, naip4
   
   # Calculate all features
   ndvi <- (naip[[4]] - naip[[1]]) / (naip[[4]] + naip[[1]])
@@ -315,7 +328,7 @@ saveRDS(rf_model_5, "~/Desktop/marshbirds_data/rf_model_5_pca.rds")
 
 ```{r}
 # Choose which model to use for predictions
-CHOSEN_MODEL <- 1  # Change this to 1, 2, 3, 4, or 5
+CHOSEN_MODEL <- 2  # Change this to 1, 2, 3, 4, or 5
 
 # Load the chosen model
 if (CHOSEN_MODEL == 1) {
