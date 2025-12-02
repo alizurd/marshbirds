@@ -1,0 +1,463 @@
+---
+title: "Saltmarsh Habitat Classification Models"
+author: "Alyssa Bueno"
+date: "2025-12-01"
+output: 
+  pdf_document:
+      highlight: tango
+      keep_tex: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = "/Users/alyssabueno/Desktop/marshbirdsoutput/round_12")
+
+library(terra)
+library(randomForest)
+library(dplyr)
+library(caret)
+library(sf)
+library(tidyr)
+library(ggplot2)
+```
+
+# PART 1: Load and Process Training Data
+
+```{r}
+# File paths
+raster_files <- c(
+  "/Users/alyssabueno/Desktop/marshbirds_data/clips/clip_bx.tif",
+  "/Users/alyssabueno/Desktop/marshbirds_data/clips/clip_li.tif",
+  "/Users/alyssabueno/Desktop/marshbirds_data/clips/clip_gb.tif"
+)
+
+shp_files <- c(
+  "/Users/alyssabueno/Desktop/marshbirds_data/training_polygons/training_polygons_bx.shp",
+  "/Users/alyssabueno/Desktop/marshbirds_data/training_polygons/training_polygons_li.shp",
+  "/Users/alyssabueno/Desktop/marshbirds_data/training_polygons/training_polygons_gb.shp"
+)
+
+rasters <- lapply(raster_files, rast)
+polygons <- lapply(shp_files, vect)
+
+# -------------------------------
+# Extract from all training sites
+# -------------------------------
+
+all_extracted <- list()
+pca_model <- NULL  # tbd to store the PCA model
+
+for (i in 1:length(rasters)) {
+  naip <- rasters[[i]]
+  polygon <- polygons[[i]]
+  
+  names(naip) <- paste0("naip", 1:4)
+  
+  # Calculate all features
+  ndvi <- (naip[[4]] - naip[[1]]) / (naip[[4]] + naip[[1]])
+  names(ndvi) <- "ndvi"
+  
+  ndwi <- (naip[[4]] - naip[[2]]) / (naip[[4]] + naip[[2]])
+  names(ndwi) <- "ndwi"
+  
+  brightness <- (naip[[1]] + naip[[2]] + naip[[3]] + naip[[4]]) / 4
+  names(brightness) <- "brightness"
+  
+  # Create PCA model from first training dataset, then reuse
+  if (is.null(pca_model)) {
+    all_for_pca <- c(naip, ndvi)
+    vals <- values(all_for_pca)
+    vals <- vals[complete.cases(vals), ]
+    pca_model <- prcomp(vals, center = TRUE, scale. = TRUE)
+  }
+  
+  # Apply PCA
+  pca_input <- c(naip, ndvi)
+  pca <- predict(pca_input, pca_model, index = 1:5)
+  names(pca) <- paste0("PCA", 1:5)
+  
+  # Full feature stack (all features calculated)
+  full_stack <- c(naip, ndvi, ndwi, brightness, pca)
+  
+  # Extract
+  extracted_i <- terra::extract(full_stack, polygon, df = TRUE)
+  extracted_i$class <- polygon$class[extracted_i$ID]
+  extracted_i$ID <- NULL
+  
+  all_extracted[[i]] <- extracted_i
+  cat("Processed training site", i, "\n")
+}
+
+# Combine all sites
+extracted <- bind_rows(all_extracted)
+extracted_clean <- na.omit(extracted)
+
+# Sample balanced training data
+training_data_full <- extracted_clean %>%
+  group_by(class) %>%
+  sample_n(min(2000, n())) %>%
+  ungroup() %>%
+  mutate(class = factor(class))
+
+cat("\nTraining samples per class:\n")
+print(table(training_data_full$class))
+
+# Save PCA model 
+saveRDS(pca_model, "~/Desktop/marshbirds_data/models/pca_model.rds")
+```
+
+# PART 2: Load and Calculate Test Data
+
+```{r}
+test_raster_files <- c(
+  "/Users/alyssabueno/Desktop/marshbirds_data/test_clips/test_clips_bx.tif",
+  "/Users/alyssabueno/Desktop/marshbirds_data/test_clips/test_clips_li.tif",
+  "/Users/alyssabueno/Desktop/marshbirds_data/test_clips/test_clips_gb.tif"
+)
+
+test_shp_files <- c(
+  "/Users/alyssabueno/Desktop/marshbirds_data/test_polygons/test_polygons_bx.shp",
+  "/Users/alyssabueno/Desktop/marshbirds_data/test_polygons/test_polygons_li.shp",
+  "/Users/alyssabueno/Desktop/marshbirds_data/test_polygons/test_polygons_gb.shp"
+)
+
+test_rasters <- lapply(test_raster_files, rast)
+test_polygons <- lapply(test_shp_files, vect)
+
+test_extracted <- list()
+
+for (i in 1:length(test_rasters)) {
+  naip <- test_rasters[[i]]
+  polygon <- test_polygons[[i]]
+  
+  names(naip) <- paste0("naip", 1:4)
+  
+  # Calculate features (using SAME pca_model from training)
+  ndvi <- (naip[[4]] - naip[[1]]) / (naip[[4]] + naip[[1]])
+  names(ndvi) <- "ndvi"
+  
+  ndwi <- (naip[[4]] - naip[[2]]) / (naip[[4]] + naip[[2]])
+  names(ndwi) <- "ndwi"
+  
+  brightness <- (naip[[1]] + naip[[2]] + naip[[3]] + naip[[4]]) / 4
+  names(brightness) <- "brightness"
+  
+  # Apply SAME PCA model
+  pca_input <- c(naip, ndvi)
+  pca <- predict(pca_input, pca_model, index = 1:5)
+  names(pca) <- paste0("PCA", 1:5)
+  
+  # Full stack
+  full_stack <- c(naip, ndvi, ndwi, brightness, pca)
+  
+  # Extract
+  extracted_i <- terra::extract(full_stack, polygon, df = TRUE)
+  extracted_i$class <- polygon$class[extracted_i$ID]
+  extracted_i$ID <- NULL
+  
+  test_extracted[[i]] <- extracted_i
+  cat("Processed test site", i, "\n")
+}
+
+extracted_test <- bind_rows(test_extracted)
+test_data_full <- na.omit(extracted_test) %>%
+  mutate(class = factor(class))
+
+cat("\nTest samples per class:\n")
+print(table(test_data_full$class))
+```
+
+# ITERATION 1: Full Model (NAIP + NDVI + NDWI + Brightness + PCA)
+
+```{r}
+cat("\n========== ITERATION 1: Full Model ==========\n")
+
+# Use all columns from training_data_full
+rf_model_1 <- randomForest(class ~ ., 
+                           data = training_data_full, 
+                           ntree = 500)
+
+# Test
+preds_1 <- predict(rf_model_1, newdata = test_data_full)
+cat("Test Accuracy:", round(mean(preds_1 == test_data_full$class), 4), "\n\n")
+
+print(rf_model_1)
+print(confusionMatrix(preds_1, test_data_full$class))
+
+# Variable importance
+imp_1 <- as.data.frame(rf_model_1$importance)
+imp_1$feature <- rownames(imp_1)
+
+ggplot(imp_1, aes(x = reorder(feature, MeanDecreaseGini), y = MeanDecreaseGini)) +
+  geom_col(fill = "steelblue") +
+  coord_flip() +
+  labs(title = "Model 1: Full Model Variable Importance",
+       x = "Feature", y = "Mean Decrease Gini") +
+  theme_minimal()
+
+# Save model
+saveRDS(rf_model_1, "~/Desktop/marshbirds_data/rf_model_1_full.rds")
+```
+
+# ITERATION 2: NDWI + NDVI + PCA
+
+```{r}
+cat("\n========== ITERATION 2: NDWI + NDVI + PCA ==========\n")
+
+# Select columns
+train_2 <- training_data_full %>% 
+  select(ndwi, ndvi, starts_with("PCA"), class)
+
+test_2 <- test_data_full %>% 
+  select(ndwi, ndvi, starts_with("PCA"), class)
+
+# Train
+rf_model_2 <- randomForest(class ~ ., 
+                           data = train_2, 
+                           ntree = 500)
+
+# Test
+preds_2 <- predict(rf_model_2, newdata = test_2)
+cat("Test Accuracy:", round(mean(preds_2 == test_2$class), 4), "\n\n")
+
+print(rf_model_2)
+print(confusionMatrix(preds_2, test_2$class))
+
+# Save model
+saveRDS(rf_model_2, "~/Desktop/marshbirds_data/rf_model_2_ndwi_ndvi_pca.rds")
+```
+
+# ITERATION 3: NAIP + NDVI
+
+```{r}
+cat("\n========== ITERATION 3: NAIP + NDVI ==========\n")
+
+# Select columns
+train_3 <- training_data_full %>% 
+  select(starts_with("naip"), ndvi, class)
+
+test_3 <- test_data_full %>% 
+  select(starts_with("naip"), ndvi, class)
+
+# Train
+rf_model_3 <- randomForest(class ~ ., 
+                           data = train_3, 
+                           ntree = 500)
+
+# Test
+preds_3 <- predict(rf_model_3, newdata = test_3)
+cat("Test Accuracy:", round(mean(preds_3 == test_3$class), 4), "\n\n")
+
+print(rf_model_3)
+print(confusionMatrix(preds_3, test_3$class))
+
+# Save model
+saveRDS(rf_model_3, "~/Desktop/marshbirds_data/rf_model_3_naip_ndvi.rds")
+```
+
+# ITERATION 4: NAIP Only
+
+```{r}
+cat("\n========== ITERATION 4: NAIP Only ==========\n")
+
+# Select columns
+train_4 <- training_data_full %>% 
+  select(starts_with("naip"), class)
+
+test_4 <- test_data_full %>% 
+  select(starts_with("naip"), class)
+
+# Train
+rf_model_4 <- randomForest(class ~ ., 
+                           data = train_4, 
+                           ntree = 500)
+
+# Test
+preds_4 <- predict(rf_model_4, newdata = test_4)
+cat("Test Accuracy:", round(mean(preds_4 == test_4$class), 4), "\n\n")
+
+print(rf_model_4)
+print(confusionMatrix(preds_4, test_4$class))
+
+# Save model
+saveRDS(rf_model_4, "~/Desktop/marshbirds_data/rf_model_4_naip.rds")
+```
+
+# ITERATION 5: PCA Only
+
+```{r}
+cat("\n========== ITERATION 5: PCA Only ==========\n")
+
+# Select columns
+train_5 <- training_data_full %>% 
+  select(starts_with("PCA"), class)
+
+test_5 <- test_data_full %>% 
+  select(starts_with("PCA"), class)
+
+# Train
+rf_model_5 <- randomForest(class ~ ., 
+                           data = train_5, 
+                           ntree = 500)
+
+# Test
+preds_5 <- predict(rf_model_5, newdata = test_5)
+cat("Test Accuracy:", round(mean(preds_5 == test_5$class), 4), "\n\n")
+
+print(rf_model_5)
+print(confusionMatrix(preds_5, test_5$class))
+
+# Save model
+saveRDS(rf_model_5, "~/Desktop/marshbirds_data/rf_model_5_pca.rds")
+```
+
+# PART 3: Classify New Rasters (Choose Your Model)
+
+```{r}
+# Choose which model to use for predictions
+CHOSEN_MODEL <- 1  # Change this to 1, 2, 3, 4, or 5
+
+# Load the chosen model
+if (CHOSEN_MODEL == 1) {
+  rf_model <- rf_model_1
+  feature_cols <- names(training_data_full)[names(training_data_full) != "class"]
+} else if (CHOSEN_MODEL == 2) {
+  rf_model <- rf_model_2
+  feature_cols <- c("ndwi", "ndvi", paste0("PCA", 1:5))
+} else if (CHOSEN_MODEL == 3) {
+  rf_model <- rf_model_3
+  feature_cols <- c(paste0("naip", 1:4), "ndvi")
+} else if (CHOSEN_MODEL == 4) {
+  rf_model <- rf_model_4
+  feature_cols <- paste0("naip", 1:4)
+} else if (CHOSEN_MODEL == 5) {
+  rf_model <- rf_model_5
+  feature_cols <- paste0("PCA", 1:5)
+}
+
+cat("Using Model", CHOSEN_MODEL, "\n")
+cat("Features:", paste(feature_cols, collapse = ", "), "\n\n")
+
+# List of prediction rasters
+files <- list.files(
+  "~/Desktop/marshbirds_data/pred_clips",
+  pattern = "_raster_200\\.tif$",
+  full.names = TRUE
+)
+
+out_dir <- "~/Desktop/marshbirdsoutput/round_11/"
+dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
+
+# Process each raster
+for (f in files) {
+  message("Processing: ", basename(f))
+  
+  naip <- rast(f)
+  names(naip) <- paste0("naip", 1:4)
+  
+  # Calculate all features (same as training)
+  ndvi <- (naip[[4]] - naip[[1]]) / (naip[[4]] + naip[[1]])
+  names(ndvi) <- "ndvi"
+  
+  ndwi <- (naip[[4]] - naip[[2]]) / (naip[[4]] + naip[[2]])
+  names(ndwi) <- "ndwi"
+  
+  brightness <- (naip[[1]] + naip[[2]] + naip[[3]] + naip[[4]]) / 4
+  names(brightness) <- "brightness"
+  
+  # Apply PCA (using saved model)
+  pca_input <- c(naip, ndvi)
+  pca <- predict(pca_input, pca_model, index = 1:5)
+  names(pca) <- paste0("PCA", 1:5)
+  
+  # Full stack
+  full_stack <- c(naip, ndvi, ndwi, brightness, pca)
+  
+  # Select only the features needed for this model
+  prediction_stack <- full_stack[[feature_cols]]
+  
+  # Predict
+  classified <- predict(prediction_stack, rf_model, na.rm = TRUE)
+  
+  # Save
+  base <- tools::file_path_sans_ext(basename(f))
+  out_file <- file.path(out_dir, paste0(base, "_model", CHOSEN_MODEL, "_classified.tif"))
+  writeRaster(classified, out_file, overwrite = TRUE)
+  
+  message("Saved: ", out_file, "\n")
+}
+
+message("✔ ALL DONE")
+```
+
+# Visualize Results
+
+```{r}
+# Custom colors for classes
+colors <- c(
+  "#a6d96a",  # hm  
+  "#1a9641",  # lm  
+  "#8c510a",  # md  
+  "#3288bd",  # ow  
+  "#fdae61",  # ph  
+  "#969696",  # rd  
+  "#762a83"   # up  
+)
+
+# Plot one of the classified rasters
+example_file <- list.files(out_dir, pattern = "_classified\\.tif$", full.names = TRUE)[1]
+classified <- rast(example_file)
+plot(classified, col = colors, main = basename(example_file))
+```
+
+# Compare Model Performance
+
+```{r}
+# Summary table
+results <- data.frame(
+  Model = c("Full Model", "NDWI+NDVI+PCA", "NAIP+NDVI", "NAIP Only", "PCA Only"),
+  Features = c(
+    "All",
+    "NDWI, NDVI, PCA1-5",
+    "NAIP1-4, NDVI",
+    "NAIP1-4",
+    "PCA1-5"
+  ),
+  Accuracy = c(
+    mean(preds_1 == test_data_full$class),
+    mean(preds_2 == test_2$class),
+    mean(preds_3 == test_3$class),
+    mean(preds_4 == test_4$class),
+    mean(preds_5 == test_5$class)
+  ),
+  OOB_Error = c(
+    tail(rf_model_1$err.rate[, 1], 1),
+    tail(rf_model_2$err.rate[, 1], 1),
+    tail(rf_model_3$err.rate[, 1], 1),
+    tail(rf_model_4$err.rate[, 1], 1),
+    tail(rf_model_5$err.rate[, 1], 1)
+  )
+)
+
+print(results)
+
+# Plot comparison
+ggplot(results, aes(x = reorder(Model, Accuracy), y = Accuracy)) +
+  geom_col(fill = "steelblue") +
+  geom_text(aes(label = round(Accuracy, 3)), hjust = -0.1) +
+  coord_flip() +
+  ylim(0, 1) +
+  labs(title = "Model Comparison", x = "Model", y = "Test Accuracy") +
+  theme_minimal()
+```
+
+## Key Changes:
+
+1. **PCA calculated once** from first training site, then reused everywhere
+2. **All features calculated upfront** in training/test data
+3. **Each iteration just selects columns** from the full dataset (no recalculation)
+4. **Models are saved** so you can reload them later
+5. **Single prediction loop** that works for any model (just change `CHOSEN_MODEL`)
+6. **Clear comparison** at the end to see which model performs best
+
+Now you can just change `CHOSEN_MODEL` to switch between iterations without rerunning everything!
