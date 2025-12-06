@@ -85,7 +85,7 @@ for (i in 1:length(rasters)) { # starting a loop over all rasters (rasters has 3
   }
   
   # Apply PCA
-  pca_input <- c(naip, ndvi) # call the 
+  pca_input <- c(naip, ndvi) # call the files that have the data you need to make a pca
   pca <- predict(pca_input, pca_model, index = 1:5)
   names(pca) <- paste0("PCA", 1:5)
   
