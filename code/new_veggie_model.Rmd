@@ -67,16 +67,16 @@ for (i in 1:length(rasters)) { # starting a loop over all rasters (rasters has 3
   names(naip) <- paste0("naip", 1:4) # rename the raster's bands; will become naip1, naip2, naip3, naip4
   
   # Calculate all features
-  ndvi <- (naip[[4]] - naip[[1]]) / (naip[[4]] + naip[[1]])
+  ndvi <- (naip[[4]] - naip[[1]]) / (naip[[4]] + naip[[1]]) # measures greenness
   names(ndvi) <- "ndvi"
   
-  ndwi <- (naip[[4]] - naip[[2]]) / (naip[[4]] + naip[[2]])
+  ndwi <- (naip[[4]] - naip[[2]]) / (naip[[4]] + naip[[2]]) # detects water and wet surfaces
   names(ndwi) <- "ndwi"
   
-  brightness <- (naip[[1]] + naip[[2]] + naip[[3]] + naip[[4]]) / 4
+  brightness <- (naip[[1]] + naip[[2]] + naip[[3]] + naip[[4]]) / 4 # mean of all 4 bands, average reflectance
   names(brightness) <- "brightness"
   
-  # Create PCA model from first training dataset, then reuse
+  # Create PCA model from first training dataset, which will be reused
   if (is.null(pca_model)) {
     all_for_pca <- c(naip, ndvi)
     vals <- values(all_for_pca)
@@ -85,7 +85,7 @@ for (i in 1:length(rasters)) { # starting a loop over all rasters (rasters has 3
   }
   
   # Apply PCA
-  pca_input <- c(naip, ndvi)
+  pca_input <- c(naip, ndvi) # call the 
   pca <- predict(pca_input, pca_model, index = 1:5)
   names(pca) <- paste0("PCA", 1:5)
   
