@@ -77,20 +77,20 @@ for (i in 1:length(rasters)) { # starting a loop over all rasters (rasters has 3
   names(brightness) <- "brightness"
   
   # Create PCA model from first training dataset, which will be reused
-  if (is.null(pca_model)) {
-    all_for_pca <- c(naip, ndvi)
-    vals <- values(all_for_pca)
-    vals <- vals[complete.cases(vals), ]
-    pca_model <- prcomp(vals, center = TRUE, scale. = TRUE)
+  if (is.null(pca_model)) { # check if pca_model already exists
+    all_for_pca <- c(naip, ndvi) # combines these rasters 
+    vals <- values(all_for_pca) # extracts all of the pixel values into a matrix
+    vals <- vals[complete.cases(vals), ] # remove any rows with NA values
+    pca_model <- prcomp(vals, center = TRUE, scale. = TRUE) # calculate the PCA model
   }
   
   # Apply PCA
   pca_input <- c(naip, ndvi) # call the files that have the data you need to make a pca
-  pca <- predict(pca_input, pca_model, index = 1:5)
-  names(pca) <- paste0("PCA", 1:5)
+  pca <- predict(pca_input, pca_model, index = 1:5) # this will apply the pca_model and get the 1st 5 components
+  names(pca) <- paste0("PCA", 1:5) # now give them names
   
-  # Full feature stack (all features calculated)
-  full_stack <- c(naip, ndvi, ndwi, brightness, pca)
+  # stack them up 
+  full_stack <- c(naip, ndvi, ndwi, brightness, pca) 
   
   # Extract
   extracted_i <- terra::extract(full_stack, polygon, df = TRUE)
