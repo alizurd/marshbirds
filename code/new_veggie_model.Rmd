@@ -52,9 +52,9 @@ shp_files <- c(
 rasters <- lapply(raster_files, rast)
 polygons <- lapply(shp_files, vect)
 
-# -------------------------------
-# Extract from all training plots
-# -------------------------------
+# --------------------------------------------------------------
+# Extract from all training polygons and calculate features
+# --------------------------------------------------------------
 
 # this is an empty list to store the extracted training values
 all_extracted <- list()
@@ -93,8 +93,8 @@ for (i in 1:length(rasters)) { # starting a loop over all rasters (rasters has 3
   full_stack <- c(naip, ndvi, ndwi, brightness, pca) 
   
   # Extract
-  extracted_i <- terra::extract(full_stack, polygon, df = TRUE)
-  extracted_i$class <- polygon$class[extracted_i$ID]
+  extracted_i <- terra::extract(full_stack, polygon, df = TRUE) # extract the IDs from the polygons
+  extracted_i$class <- polygon$class[extracted_i$ID] 
   extracted_i$ID <- NULL
   
   all_extracted[[i]] <- extracted_i
