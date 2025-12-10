@@ -93,8 +93,7 @@ for (i in 1:length(rasters)) { # starting a loop over all rasters (rasters has 3
   full_stack <- c(naip, ndvi, ndwi, brightness, pca) 
   
   # Extract
-  extracted_i <- terra::extract(full_stack, polygon, df = TRUE) # extract the IDs from the polygons
-  extracted_i$class <- polygon$class[extracted_i$ID] 
+  extracted_i <- terra::extract(full_stack, polygon, df = TRUE) # extract the pixels from the polygons
   extracted_i$ID <- NULL
   
   all_extracted[[i]] <- extracted_i
