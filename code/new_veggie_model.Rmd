@@ -19,7 +19,7 @@ This code outlines 4 different model classification iterations, each differing b
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-knitr::opts_knit$set(root.dir = "/Users/alyssabueno/Desktop/marshbirdsoutput/round_12") # increase by 1 everytime you run a new model
+knitr::opts_knit$set(root.dir = "/Users/alyssabueno/Desktop/marshbirdsoutput/round_13") # increase by 1 everytime you run a new model
 
 library(terra)
 library(randomForest)
@@ -93,8 +93,15 @@ for (i in 1:length(rasters)) { # starting a loop over all rasters (rasters has 3
   full_stack <- c(naip, ndvi, ndwi, brightness, pca) 
   
   # Extract
-  extracted_i <- terra::extract(full_stack, polygon, df = TRUE) # extract the pixels from the polygons
+  extracted_i <- terra::extract(full_stack, polygon, df = TRUE)
+
+  # Attach class labels BEFORE deleting ID
+  extracted_i$class <- polygon$class[extracted_i$ID]
+
+  # Now it's safe to remove ID
   extracted_i$ID <- NULL
+
+
   
   all_extracted[[i]] <- extracted_i
   cat("Processed training site", i, "\n")
@@ -357,7 +364,7 @@ files <- list.files(
   full.names = TRUE
 )
 
-out_dir <- "~/Desktop/marshbirdsoutput/round_11/"
+out_dir <- "~/Desktop/marshbirdsoutput/round_13/"
 dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
 
 # Process each raster
