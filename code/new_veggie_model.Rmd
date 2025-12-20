@@ -420,11 +420,12 @@ colors <- c(
   "#3288bd",  # ow  
   "#fdae61",  # ph  
   "#969696",  # rd  
+  "#adae80",  # sd
   "#762a83"   # up  
 )
 
 # Plot one of the classified rasters
-example_file <- list.files(out_dir, pattern = "_classified\\.tif$", full.names = TRUE)[1]
+example_file <- list.files(out_dir, pattern = "_classified\\.tif$", full.names = TRUE)[4]
 classified <- rast(example_file)
 plot(classified, col = colors, main = basename(example_file))
 ```
@@ -469,14 +470,3 @@ ggplot(results, aes(x = reorder(Model, Accuracy), y = Accuracy)) +
   labs(title = "Model Comparison", x = "Model", y = "Test Accuracy") +
   theme_minimal()
 ```
-
-## Key Changes:
-
-1. **PCA calculated once** from first training site, then reused everywhere
-2. **All features calculated upfront** in training/test data
-3. **Each iteration just selects columns** from the full dataset (no recalculation)
-4. **Models are saved** so you can reload them later
-5. **Single prediction loop** that works for any model (just change `CHOSEN_MODEL`)
-6. **Clear comparison** at the end to see which model performs best
-
-Now you can just change `CHOSEN_MODEL` to switch between iterations without rerunning everything!
