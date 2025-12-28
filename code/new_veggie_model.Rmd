@@ -430,6 +430,113 @@ classified <- rast(example_file)
 plot(classified, col = colors, main = basename(example_file))
 ```
 
+# Calculate class percentages in each plot
+
+```{r}
+
+# class_percentages <- function(raster_path) {
+#   r <- rast(raster_path)
+#   freq_table <- freq(r, useNA = "no")
+#   total_pixels <- sum(freq_table[, 2])
+#   percentages <- (freq_table[, 2] / total_pixels) * 100
+#   class_labels <- c("hm", "lm", "md", "ow", "ph", "rd", "sd", "up")
+  
+#   result <- data.frame(
+#     Class = class_labels[freq_table[, 1]],
+#     Percentage = round(percentages, 2)
+#   )
+  
+#   return(result)
+# }
+
+# load shp first
+plots <- st_read("~/Desktop/marshbirdsoutput/round_7/200m_buffer.shp") # need to upload all of the shapefiles in a for loop(?)
+
+# create a lookup table with ID and Name before converting to terra
+plot_lookup <- plots %>%
+  st_drop_geometry() %>%  # remove geometry to create simple dataframe
+  mutate(ID = row_number()) %>%  # create ID to match terra::extract output
+  select(ID, Name)  # keep ID and Name columns
+
+# convert to terra format for extract()
+plots_terra <- vect(plots)
+
+# initialize empty list to store results from each tile
+all_extractions <- list()
+
+# extract from each classified tile (memory efficient approach)
+for(i in seq_along(classified_files)) {
+  message("Extracting from tile ", i, " of ", length(classified_files), ": ", basename(classified_files[i]))
+  
+  tryCatch({
+    # load one tile at a time
+    tile_raster <- rast(classified_files[i])
+    
+    # extract values for plots that intersect this tile
+    extracted_values <- terra::extract(tile_raster, plots_terra, df = TRUE)
+    
+    # rename the classification column to 'class' (it might be named differently)
+    names(extracted_values)[2] <- "class"
+    
+    # only keep rows that actually have data (removes plots that don't intersect this tile)
+    extracted_values <- extracted_values[!is.na(extracted_values$class), ]
+    
+    if(nrow(extracted_values) > 0) {
+      all_extractions[[i]] <- extracted_values
+    }
+    
+    # clean up memory
+    rm(tile_raster)
+    gc()
+    
+  }, error = function(e) {
+    message("Error extracting from ", basename(classified_files[i]), ": ", e$message)
+  })
+}
+
+# combine all extractions
+all_values <- do.call(rbind, all_extractions)
+
+# create class mapping
+class_mapping <- data.frame(
+  class_code = c(1, 2, 3, 4, 5, 6, 7, 8),  # numerical codes from raster
+  class_name = c("hm", "lm", "ow", "ph", "rd", "up", "md", "sd")  # corresponding class names
+)
+
+# map numerical codes to class names
+
+all_values <- all_values %>%
+  mutate(class = as.numeric(class)) %>%  # convert factor to its underlying numeric level
+  left_join(class_mapping, by = c("class" = "class_code")) %>%
+  select(-class) %>%
+  rename(class = class_name)
+
+# calculate percent cover per plot
+percents <- all_values %>%
+  group_by(ID, class) %>%
+  summarize(pixel_count = n(), .groups = "drop") %>%
+  group_by(ID) %>%
+  mutate(percent = pixel_count / sum(pixel_count)) %>%
+  ungroup()
+
+# join with plot names
+percents_with_names <- percents %>%
+  left_join(plot_lookup, by = "ID")
+
+# pivot to wide format
+percent_cover <- percents_with_names %>%
+  select(ID, Name, class, percent) %>%
+  pivot_wider(names_from = class, values_from = percent, values_fill = 0) %>%
+  rename(plot_id = ID, plot_name = Name) %>%
+  mutate(across(where(is.numeric), \(x) round(x, 2))) %>%
+  relocate(plot_id, plot_name)  # put ID and Name columns first
+
+# save to CSV
+write.csv(percent_cover, "~/Desktop/marshbirdsoutput/round_7/percent_cover_by_plot.csv", row.names = FALSE)
+
+```
+
+
 # Compare Model Performance
 
 ```{r}
