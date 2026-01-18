@@ -528,11 +528,105 @@ percent_cover <- percents_with_names %>%
   relocate(plot_id, plot_name)
 
 # Save to CSV
-output_file <- "~/Desktop/marshbirdsoutput/round_13/percent_cover_by_plot.csv"
-write.csv(percent_cover, output_file, row.names = FALSE)
 
-message("✔ Done! Saved to: ", output_file)
+write.csv(percent_cover, "~/Desktop/percent_cover_by_plot_jan.csv", row.names = FALSE)
+
+# output_file <- "~/Desktop/marshbirdsoutput/round_13/percent_cover_by_plot.csv"
+# write.csv(percent_cover, output_file, row.names = FALSE)
+
+# message("✔ Done! Saved to: ", output_file)
 ```
+
+```{r} 
+# claude check.options
+
+# Get all classified raster files
+classified_files <- list.files(
+  out_dir,
+  pattern = "_classified\\.tif$",
+  full.names = TRUE
+)
+
+cat("Found", length(classified_files), "classified rasters to process\n")
+
+# Load shapefile once
+cat("Loading shapefile...\n")
+plots <- st_read("~/Desktop/marshbirdsdata/buffers/buffer_all_200.shp")
+cat("Shapefile loaded. Number of plots:", nrow(plots), "\n")
+
+# Create lookup table
+cat("Creating lookup table...\n")
+plot_lookup <- plots %>%
+  st_drop_geometry() %>%
+  mutate(ID = row_number()) %>%
+  select(ID, Name)
+cat("Lookup table created\n")
+
+# Convert to terra format
+cat("Converting to terra format...\n")
+plots_terra <- vect(plots)
+cat("Conversion complete\n")
+
+# Class mapping
+class_mapping <- data.frame(
+  class_code = c(1, 2, 3, 4, 5, 6, 7, 8),
+  class_name = c("hm", "lm", "ow", "ph", "rd", "up", "md", "sd")
+)
+
+# Initialize empty list for all extractions
+all_extractions <- list()
+
+# Process each raster tile
+for(i in seq_along(classified_files)) {
+  message("Processing tile ", i, " of ", length(classified_files), ": ", 
+          basename(classified_files[i]))
+  
+  tryCatch({
+    # Load one tile at a time
+    tile_raster <- rast(classified_files[i])
+    
+    # Extract values for plots that intersect this tile
+    extracted_values <- terra::extract(tile_raster, plots_terra, df = TRUE)
+    
+    # Rename classification column
+    names(extracted_values)[2] <- "class"
+    
+    # Keep only rows with data
+    extracted_values <- extracted_values[!is.na(extracted_values$class), ]
+    
+    if(nrow(extracted_values) > 0) {
+      all_extractions[[i]] <- extracted_values
+      cat("  Added", nrow(extracted_values), "rows\n")
+    } else {
+      cat("  No data extracted\n")
+    }
+    
+    # Clean up memory
+    rm(tile_raster)
+    gc(verbose = FALSE)
+    
+  }, error = function(e) {
+    message("Error processing ", basename(classified_files[i]), ": ", e$message)
+  })
+}
+
+cat("\n=== Extraction complete ===\n")
+cat("Number of successful extractions:", length(all_extractions), "\n")
+
+# Check if we have any data
+if(length(all_extractions) == 0) {
+  stop("No data was extracted! Check that your shapefile overlaps with the rasters.")
+}
+
+# Combine all extractions
+message("Combining all extracted values...")
+all_values <- do.call(rbind, all_extractions)
+cat("Combined data has", nrow(all_values), "rows\n")
+
+# Rest of your code continues...
+
+```
+
 
 
 # Compare Model Performance
