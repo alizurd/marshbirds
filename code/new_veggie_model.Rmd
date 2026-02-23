@@ -1,7 +1,7 @@
 ---
 title: "Saltmarsh Habitat Classification Models"
 author: "Alyssa Bueno"
-date: "2025-12-01"
+date: "2026-02-21"
 output: 
   pdf_document:
       highlight: tango
@@ -436,21 +436,20 @@ plot(classified, col = colors, main = basename(example_file))
 
 # Get all classified raster files
 classified_files <- list.files(
-  out_dir,  # or specify the directory containing your classified rasters
+  out_dir,
   pattern = "_classified\\.tif$",
   full.names = TRUE
 )
-
 cat("Found", length(classified_files), "classified rasters to process\n")
 
 # Load shapefile once
-plots <- st_read("~/Desktop/marshbirdsdata/buffers/buffer_all_200.shp")
+plots <- st_read("~/Desktop/marshbirds_data/buffers/buffer_all_200.shp")
 
-# Create lookup table
-plot_lookup <- plots %>%
-  st_drop_geometry() %>%
-  mutate(ID = row_number()) %>%
-  select(ID, Name)
+# # Create lookup table — maps terra's integer ID back to your point_id
+# plot_lookup <- plots %>%
+#   st_drop_geometry() %>%
+#   mutate(ID = row_number()) %>%
+#   select(ID, point_id)          # <-- keep both columns
 
 # Convert to terra format
 plots_terra <- vect(plots)
@@ -470,23 +469,15 @@ for(i in seq_along(classified_files)) {
           basename(classified_files[i]))
   
   tryCatch({
-    # Load one tile at a time
     tile_raster <- rast(classified_files[i])
-    
-    # Extract values for plots that intersect this tile
     extracted_values <- terra::extract(tile_raster, plots_terra, df = TRUE)
-    
-    # Rename classification column
     names(extracted_values)[2] <- "class"
-    
-    # Keep only rows with data
     extracted_values <- extracted_values[!is.na(extracted_values$class), ]
     
     if(nrow(extracted_values) > 0) {
       all_extractions[[i]] <- extracted_values
     }
     
-    # Clean up memory
     rm(tile_raster)
     gc()
     
@@ -499,6 +490,11 @@ for(i in seq_along(classified_files)) {
 message("Combining all extracted values...")
 all_values <- do.call(rbind, all_extractions)
 
+
+all_values <- all_values %>%
+  mutate(point_id = plots$point_id[ID])   # now has point_id column
+
+
 # Map numerical codes to class names
 all_values <- all_values %>%
   mutate(class = as.numeric(class)) %>%
@@ -509,32 +505,23 @@ all_values <- all_values %>%
 # Calculate percent cover per plot
 message("Calculating percent cover...")
 percents <- all_values %>%
-  group_by(ID, class) %>%
+  group_by(point_id, class) %>%
   summarize(pixel_count = n(), .groups = "drop") %>%
-  group_by(ID) %>%
+  group_by(point_id) %>%
   mutate(percent = pixel_count / sum(pixel_count) * 100) %>%
   ungroup()
 
-# Join with plot names
-percents_with_names <- percents %>%
-  left_join(plot_lookup, by = "ID")
-
 # Pivot to wide format
-percent_cover <- percents_with_names %>%
-  select(ID, Name, class, percent) %>%
+percent_cover <- percents %>%                     # <-- was percents_with_names
+  select(point_id, class, percent) %>%
   pivot_wider(names_from = class, values_from = percent, values_fill = 0) %>%
-  rename(plot_id = ID, plot_name = Name) %>%
   mutate(across(where(is.numeric), \(x) round(x, 2))) %>%
-  relocate(plot_id, plot_name)
+  relocate(point_id)
+
+View(percent_cover)
 
 # Save to CSV
-
 write.csv(percent_cover, "~/Desktop/percent_cover_by_plot_jan.csv", row.names = FALSE)
-
-# output_file <- "~/Desktop/marshbirdsoutput/round_13/percent_cover_by_plot.csv"
-# write.csv(percent_cover, output_file, row.names = FALSE)
-
-# message("✔ Done! Saved to: ", output_file)
 ```
 
 ```{r} 
