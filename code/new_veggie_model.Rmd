@@ -333,6 +333,8 @@ saveRDS(rf_model_5, "~/Desktop/marshbirds_data/rf_model_5_pca.rds")
 # PART 3: Classify New Rasters (Choose Your Model)
 
 ```{r}
+# PART 3: Classify New Rasters (Choose Your Model)
+
 # Choose which model to use for predictions
 CHOSEN_MODEL <- 2  # Change this to 1, 2, 3, 4, or 5
 
@@ -367,46 +369,60 @@ files <- list.files(
 out_dir <- "~/Desktop/marshbirdsoutput/round_13/"
 dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
 
-# Process each raster
+# -------------------------------------------------------------------
+# Process each raster — feature calculations mirror the original code
+# -------------------------------------------------------------------
+
 for (f in files) {
   message("Processing: ", basename(f))
   
+  # Load raster (called 'naip' to match original code exactly)
   naip <- rast(f)
   names(naip) <- paste0("naip", 1:4)
   
-  # Calculate all features (same as training)
+  # --- Calculate NDVI (same formula as original) ---
   ndvi <- (naip[[4]] - naip[[1]]) / (naip[[4]] + naip[[1]])
   names(ndvi) <- "ndvi"
   
+  # --- Calculate NDWI (same formula as original) ---
   ndwi <- (naip[[4]] - naip[[2]]) / (naip[[4]] + naip[[2]])
   names(ndwi) <- "ndwi"
   
+  # --- Calculate Brightness (same formula as original) ---
   brightness <- (naip[[1]] + naip[[2]] + naip[[3]] + naip[[4]]) / 4
   names(brightness) <- "brightness"
   
-  # Apply PCA (using saved model)
+  # --- Apply PCA using the SAME pca_model saved during training ---
+  # Input must match what pca_model was trained on: c(naip, ndvi)
   pca_input <- c(naip, ndvi)
   pca <- predict(pca_input, pca_model, index = 1:5)
   names(pca) <- paste0("PCA", 1:5)
   
-  # Full stack
+  # --- Stack all layers (same order as training full_stack) ---
   full_stack <- c(naip, ndvi, ndwi, brightness, pca)
   
-  # Select only the features needed for this model
+  # --- Select only the features this model needs ---
   prediction_stack <- full_stack[[feature_cols]]
   
-  # Predict
+  # --- Rename to match training names exactly ---
+  names(prediction_stack) <- feature_cols
+  
+  # --- Classify ---
   classified <- predict(prediction_stack, rf_model, na.rm = TRUE)
   
-  # Save
+  # --- Save output ---
   base <- tools::file_path_sans_ext(basename(f))
   out_file <- file.path(out_dir, paste0(base, "_model", CHOSEN_MODEL, "_classified.tif"))
   writeRaster(classified, out_file, overwrite = TRUE)
   
   message("Saved: ", out_file, "\n")
+  
+  # Clean up memory between tiles
+  rm(naip, ndvi, ndwi, brightness, pca_input, pca, full_stack, prediction_stack, classified)
+  gc()
 }
 
-message("✔ ALL DONE")
+message("ALL DONE")
 ```
 
 # Visualize Results
@@ -432,98 +448,6 @@ plot(classified, col = colors, main = basename(example_file))
 
 # Calculate class percentages in each plot
 
-```{r}
-
-# Get all classified raster files
-classified_files <- list.files(
-  out_dir,
-  pattern = "_classified\\.tif$",
-  full.names = TRUE
-)
-cat("Found", length(classified_files), "classified rasters to process\n")
-
-# Load shapefile once
-plots <- st_read("~/Desktop/marshbirds_data/buffers/buffer_all_200.shp")
-
-# # Create lookup table — maps terra's integer ID back to your point_id
-# plot_lookup <- plots %>%
-#   st_drop_geometry() %>%
-#   mutate(ID = row_number()) %>%
-#   select(ID, point_id)          # <-- keep both columns
-
-# Convert to terra format
-plots_terra <- vect(plots)
-
-# Class mapping
-class_mapping <- data.frame(
-  class_code = c(1, 2, 3, 4, 5, 6, 7, 8),
-  class_name = c("hm", "lm", "ow", "ph", "rd", "up", "md", "sd")
-)
-
-# Initialize empty list for all extractions
-all_extractions <- list()
-
-# Process each raster tile
-for(i in seq_along(classified_files)) {
-  message("Processing tile ", i, " of ", length(classified_files), ": ", 
-          basename(classified_files[i]))
-  
-  tryCatch({
-    tile_raster <- rast(classified_files[i])
-    extracted_values <- terra::extract(tile_raster, plots_terra, df = TRUE)
-    names(extracted_values)[2] <- "class"
-    extracted_values <- extracted_values[!is.na(extracted_values$class), ]
-    
-    if(nrow(extracted_values) > 0) {
-      all_extractions[[i]] <- extracted_values
-    }
-    
-    rm(tile_raster)
-    gc()
-    
-  }, error = function(e) {
-    message("Error processing ", basename(classified_files[i]), ": ", e$message)
-  })
-}
-
-# Combine all extractions
-message("Combining all extracted values...")
-all_values <- do.call(rbind, all_extractions)
-
-
-all_values <- all_values %>%
-  mutate(point_id = plots$point_id[ID])   # now has point_id column
-
-
-# Map numerical codes to class names
-all_values <- all_values %>%
-  mutate(class = as.numeric(class)) %>%
-  left_join(class_mapping, by = c("class" = "class_code")) %>%
-  select(-class) %>%
-  rename(class = class_name)
-
-# Calculate percent cover per plot
-message("Calculating percent cover...")
-percents <- all_values %>%
-  group_by(point_id, class) %>%
-  summarize(pixel_count = n(), .groups = "drop") %>%
-  group_by(point_id) %>%
-  mutate(percent = pixel_count / sum(pixel_count) * 100) %>%
-  ungroup()
-
-# Pivot to wide format
-percent_cover <- percents %>%                     # <-- was percents_with_names
-  select(point_id, class, percent) %>%
-  pivot_wider(names_from = class, values_from = percent, values_fill = 0) %>%
-  mutate(across(where(is.numeric), \(x) round(x, 2))) %>%
-  relocate(point_id)
-
-View(percent_cover)
-
-# Save to CSV
-write.csv(percent_cover, "~/Desktop/percent_cover_by_plot_jan.csv", row.names = FALSE)
-```
-
 ```{r} 
 # claude check.options
 
@@ -537,84 +461,51 @@ classified_files <- list.files(
 cat("Found", length(classified_files), "classified rasters to process\n")
 
 # Load shapefile once
-cat("Loading shapefile...\n")
-plots <- st_read("~/Desktop/marshbirdsdata/buffers/buffer_all_200.shp")
+plots <- st_read("~/Desktop/marshbirds_data/buffers/buffer_all_200.shp")
 cat("Shapefile loaded. Number of plots:", nrow(plots), "\n")
 
-# Create lookup table
-cat("Creating lookup table...\n")
-plot_lookup <- plots %>%
-  st_drop_geometry() %>%
-  mutate(ID = row_number()) %>%
-  select(ID, Name)
-cat("Lookup table created\n")
+# names(plots)
+# colnames(all_values)
 
-# Convert to terra format
-cat("Converting to terra format...\n")
-plots_terra <- vect(plots)
-cat("Conversion complete\n")
+all_values <- bind_rows(all_extractions)
 
-# Class mapping
-class_mapping <- data.frame(
-  class_code = c(1, 2, 3, 4, 5, 6, 7, 8),
-  class_name = c("hm", "lm", "ow", "ph", "rd", "up", "md", "sd")
-)
+all_values <- all_values %>%
+  filter(!is.na(class))
 
-# Initialize empty list for all extractions
-all_extractions <- list()
+all_values <- all_values %>%
+  mutate(class_code = as.numeric(class)) %>%
+  left_join(class_mapping, by = c("class_code" = "class_code")) %>%
+  select(-class, -class_code) %>%
+  rename(class = class_name)
 
-# Process each raster tile
-for(i in seq_along(classified_files)) {
-  message("Processing tile ", i, " of ", length(classified_files), ": ", 
-          basename(classified_files[i]))
-  
-  tryCatch({
-    # Load one tile at a time
-    tile_raster <- rast(classified_files[i])
-    
-    # Extract values for plots that intersect this tile
-    extracted_values <- terra::extract(tile_raster, plots_terra, df = TRUE)
-    
-    # Rename classification column
-    names(extracted_values)[2] <- "class"
-    
-    # Keep only rows with data
-    extracted_values <- extracted_values[!is.na(extracted_values$class), ]
-    
-    if(nrow(extracted_values) > 0) {
-      all_extractions[[i]] <- extracted_values
-      cat("  Added", nrow(extracted_values), "rows\n")
-    } else {
-      cat("  No data extracted\n")
-    }
-    
-    # Clean up memory
-    rm(tile_raster)
-    gc(verbose = FALSE)
-    
-  }, error = function(e) {
-    message("Error processing ", basename(classified_files[i]), ": ", e$message)
-  })
-}
+# -----------------------------
+# Calculate percent cover
+# -----------------------------
 
-cat("\n=== Extraction complete ===\n")
-cat("Number of successful extractions:", length(all_extractions), "\n")
+percents <- all_values %>%
+  group_by(ID, class) %>%
+  summarise(pixel_count = n(), .groups = "drop") %>%
+  group_by(ID) %>%
+  mutate(percent = pixel_count / sum(pixel_count) * 100) %>%
+  ungroup()
 
-# Check if we have any data
-if(length(all_extractions) == 0) {
-  stop("No data was extracted! Check that your shapefile overlaps with the rasters.")
-}
+# Pivot wide
+percent_cover <- percents %>%
+  select(ID, class, percent) %>%
+  pivot_wider(
+    names_from = class,
+    values_from = percent,
+    values_fill = 0
+  ) %>%
+  mutate(across(where(is.numeric), ~ round(.x, 2)))
 
-# Combine all extractions
-message("Combining all extracted values...")
-all_values <- do.call(rbind, all_extractions)
-cat("Combined data has", nrow(all_values), "rows\n")
+View(percent_cover)
 
-# Rest of your code continues...
+write.csv(percent_cover,
+          "~/Desktop/percent_cover_by_plot_jan.csv",
+          row.names = FALSE)
 
 ```
-
-
 
 # Compare Model Performance
 
