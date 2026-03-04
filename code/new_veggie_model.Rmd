@@ -449,7 +449,7 @@ plot(classified, col = colors, main = basename(example_file))
 # Calculate class percentages in each plot
 
 ```{r} 
-# claude check.options
+# Calculate class percentages in each plot
 
 # Get all classified raster files
 classified_files <- list.files(
@@ -457,54 +457,94 @@ classified_files <- list.files(
   pattern = "_classified\\.tif$",
   full.names = TRUE
 )
-
 cat("Found", length(classified_files), "classified rasters to process\n")
 
-# Load shapefile once
+# Load shapefile and set CRS to match rasters
 plots <- st_read("~/Desktop/marshbirds_data/buffers/buffer_all_200.shp")
+plots <- st_set_crs(plots, crs(rast(classified_files[1])))  # match CRS to rasters
 cat("Shapefile loaded. Number of plots:", nrow(plots), "\n")
 
-# names(plots)
-# colnames(all_values)
+# Build lookup table: terra's sequential ID -> point_id
+plot_lookup <- plots %>%
+  st_drop_geometry() %>%
+  mutate(ID = row_number()) %>%
+  select(ID, point_id)
 
+# Convert to terra format
+plots_terra <- vect(plots)
+
+# Class mapping: integer codes -> class names
+class_mapping <- data.frame(
+  class_code = c(1, 2, 3, 4, 5, 6, 7, 8),
+  class_name = c("hm", "lm", "ow", "ph", "rd", "up", "md", "sd")
+)
+
+# Extract pixel values from each classified raster tile
+all_extractions <- list()
+
+for (i in seq_along(classified_files)) {
+  message("Processing tile ", i, " of ", length(classified_files), ": ",
+          basename(classified_files[i]))
+  
+  tryCatch({
+    tile_raster <- rast(classified_files[i])
+    extracted_values <- terra::extract(tile_raster, plots_terra, df = TRUE)
+    names(extracted_values)[2] <- "class"
+    extracted_values <- extracted_values[!is.na(extracted_values$class), ]
+    
+    if (nrow(extracted_values) > 0) {
+      all_extractions[[i]] <- extracted_values
+    }
+    
+    rm(tile_raster)
+    gc()
+    
+  }, error = function(e) {
+    message("Error on tile ", basename(classified_files[i]), ": ", e$message)
+  })
+}
+
+# Combine all tiles
 all_values <- bind_rows(all_extractions)
+cat("Total pixels extracted:", nrow(all_values), "\n")
 
+# Join point_id using the lookup table (safe, explicit join)
 all_values <- all_values %>%
-  filter(!is.na(class))
+  left_join(plot_lookup, by = "ID")
 
+# Map integer class codes to class names
 all_values <- all_values %>%
-  mutate(class_code = as.numeric(class)) %>%
-  left_join(class_mapping, by = c("class_code" = "class_code")) %>%
-  select(-class, -class_code) %>%
-  rename(class = class_name)
+  mutate(class = as.numeric(class)) %>%
+  left_join(class_mapping, by = c("class" = "class_code")) %>%
+  select(-class) %>%
+  rename(class = class_name) %>%
+  filter(!is.na(class), !is.na(point_id))
 
-# -----------------------------
-# Calculate percent cover
-# -----------------------------
-
+# Calculate percent cover per plot
 percents <- all_values %>%
-  group_by(ID, class) %>%
+  group_by(point_id, class) %>%
   summarise(pixel_count = n(), .groups = "drop") %>%
-  group_by(ID) %>%
-  mutate(percent = pixel_count / sum(pixel_count) * 100) %>%
+  group_by(point_id) %>%
+  mutate(percent = pixel_count / sum(pixel_count)) %>%
   ungroup()
 
-# Pivot wide
+# Pivot to wide format: one row per plot, one column per class
 percent_cover <- percents %>%
-  select(ID, class, percent) %>%
+  select(point_id, class, percent) %>%
   pivot_wider(
     names_from = class,
     values_from = percent,
     values_fill = 0
   ) %>%
-  mutate(across(where(is.numeric), ~ round(.x, 2)))
+  mutate(across(where(is.numeric), ~ round(.x, 2))) %>%
+  relocate(point_id)
 
+cat("Final table dimensions:", nrow(percent_cover), "plots x", ncol(percent_cover), "columns\n")
 View(percent_cover)
 
 write.csv(percent_cover,
           "~/Desktop/percent_cover_by_plot_jan.csv",
           row.names = FALSE)
-
 ```
 
 # Compare Model Performance
