@@ -11,7 +11,7 @@ library(lubridate)
 # import species data
 # years <- 2011:2014
 # sharp_files <- sprintf("~/Desktop/sharp_data/working_data/SHARP_surveyData_%d.csv", years)
-sharp_files <- read.csv("~/Desktop/NY_SHARP Survey Data Master File 2011-2024 - Copy of NY_SHARP Survey Data Master File 2011-2024 (1).csv")
+sharp_files <- read.csv("~/Desktop/NY_SHARP Survey Data Master File 2011-2024 copy.csv")
 sharp_files <- clean_names(sharp_files)
 View(sharp_files)
 
@@ -22,35 +22,37 @@ hab_data <- habitat_perc_cover <- read.csv("~/Desktop/sharp_data/percent_cover_b
 # cleaning data
 # ---------------------------------------------
 
-# define survey cols for sharp_files
-survey_cols <- c("region_num", "state", "hexagon", "point_id", "patch_id", 
-                 "visit_num", "survey_window", "survey_date", "year", "month", 
-                 "day", "observer", "tide", "survey_time", "temp_f", "sky", 
-                 "wind_sp", "noise", "alpha_code", "total_count_n")
-
-# read csvs, clean col names, and bind them all together 
-full_data_raw <- lapply(sharp_files, function(file) {
-  read.csv(file) %>%
-    clean_names() %>%
-    select(all_of(survey_cols))
-}) %>%
-  bind_rows()
-
 # date must be converted from chr to date
-full_data_raw$survey_date <- ymd(full_data_raw$survey_date)
+sharp_files$survey_date <- mdy(sharp_files$survey_date)
 # class(full_data_raw$survey_date)
 
+# create year column from survey date 
+sharp_files$year <- year(sharp_files$survey_date)  
+
+# unique(sharp_files$year)
+# View(sharp_files)
+
+
+# define survey cols for sharp_files
+survey_cols <- c("region_num", "state", "hexagon", "point_id", "patch_id", 
+                 "visit_num", "survey_date", "year",
+                 "observer", "tide", "survey_time", "temp_f", "sky", 
+                 "wind_sp", "noise", "alpha_code", "total_count")
+
+# converts nulls to NA to silence any warnings when converting time
+sharp_files$survey_time <- ifelse(sharp_files$survey_time == "NULL", NA, sharp_files$survey_time)
+
 # just converting just the time here, not the date
-date_time_fix <- full_data_raw %>%
+date_time_fix <- sharp_files %>%
   mutate(
     time = period_to_seconds(hm(survey_time)) / 60, # minutes since midnight
-    total_count_n = as.numeric(total_count_n),
-    presence = as.integer(total_count_n > 0)
+    total_count_n = as.numeric(total_count),
+    presence = as.integer(total_count > 0)
   ) %>%
   group_by(point_id, visit_num, survey_date, time, alpha_code) %>%
   summarise(
     across(
-      c(patch_id, survey_window, observer, tide, temp_f, wind_sp, sky, noise, state, presence),
+      c(observer, tide, temp_f, wind_sp, sky, noise),
       ~ first(.x), # take the first value within group
       .names = "{.col}"
     ),
@@ -58,18 +60,14 @@ date_time_fix <- full_data_raw %>%
     .groups = "drop"
   )
 
-# check to see what's causing the na coercion
-# full_data_raw %>%
-  filter(!grepl("^[0-9.]+$", total_count_n)) %>%
-  distinct(total_count_n)
-
 # ---------------------------------------------
 # filtering data to state and species of interest
 # ---------------------------------------------
 
-#filter out NY state and 3 species of interest
+#filter out NY state and 3 species of interest -- update: new files that Liz sent already filter state
 ny_bird_data <- date_time_fix %>%
-  filter(state == "NY",
+  filter(
+    # state == "NY",
          alpha_code %in% c("SALS", "SESP", "CLRA")) # potentially include VIRA and LEBI in future models
 
 # ---------------------------------------------
