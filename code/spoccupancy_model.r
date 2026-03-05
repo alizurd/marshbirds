@@ -16,7 +16,7 @@ sharp_files <- clean_names(sharp_files)
 View(sharp_files)
 
 # import habitat data
-hab_data <- habitat_perc_cover <- read.csv("~/Desktop/sharp_data/percent_cover_by_plot.csv")
+hab_data <- read.csv("~/Desktop/percent_cover_by_plot_march.csv")
 
 # ---------------------------------------------
 # cleaning data
@@ -28,10 +28,6 @@ sharp_files$survey_date <- mdy(sharp_files$survey_date)
 
 # create year column from survey date 
 sharp_files$year <- year(sharp_files$survey_date)  
-
-# unique(sharp_files$year)
-# View(sharp_files)
-
 
 # define survey cols for sharp_files
 survey_cols <- c("region_num", "state", "hexagon", "point_id", "patch_id", 
@@ -45,20 +41,20 @@ sharp_files$survey_time <- ifelse(sharp_files$survey_time == "NULL", NA, sharp_f
 # just converting just the time here, not the date
 date_time_fix <- sharp_files %>%
   mutate(
-    time = period_to_seconds(hm(survey_time)) / 60, # minutes since midnight
-    total_count_n = as.numeric(total_count),
-    presence = as.integer(total_count > 0)
+    time = period_to_seconds(hm(survey_time)) / 60,
+    total_count = as.numeric(total_count),
   ) %>%
   group_by(point_id, visit_num, survey_date, time, alpha_code) %>%
   summarise(
     across(
       c(observer, tide, temp_f, wind_sp, sky, noise),
-      ~ first(.x), # take the first value within group
+      ~ first(.x),
       .names = "{.col}"
     ),
-    count = sum(total_count_n, na.rm = TRUE), # sum the count of individuals
+    count = sum(total_count, na.rm = TRUE),
     .groups = "drop"
-  )
+  ) %>%
+  mutate(presence = as.integer(count > 0))  
 
 # ---------------------------------------------
 # filtering data to state and species of interest
@@ -78,24 +74,24 @@ full_data <- ny_bird_data %>%
   left_join(hab_data, by = "point_id") %>%
   filter(!is.na(hm)) 
 
-# ----------------------------------------------------------------------
-# filter out the sites that don't have any survey data
-# ----------------------------------------------------------------------
-
-#filter for sites that are not completely NA
-points_with_data <- full_data %>%
-  group_by(point_id) %>%
-  summarise(contains_data = any(!is.na(presence)), .groups = 'drop') %>% # will return a single true if any observation is not NA
-  filter(contains_data) %>%
-  pull(point_id)
-
-full_data_clean <- full_data %>%
-  filter(point_id %in% points_with_data)
+# # ----------------------------------------------------------------------
+# # filter out the sites that don't have any survey data
+# # ----------------------------------------------------------------------
+# 
+# #filter for sites that are not completely NA
+# points_with_data <- full_data %>%
+#   group_by(point_id) %>%
+#   summarise(contains_data = any(!is.na(presence)), .groups = 'drop') %>% # will return a single true if any observation is not NA
+#   filter(contains_data) %>%
+#   pull(point_id)
+# 
+# full_data_clean <- full_data %>%
+#   filter(point_id %in% points_with_data)
 
 # ----------------------------------------------------------------------
 # Create detection array function
 # ----------------------------------------------------------------------
-create_detection_array <- function(data) {
+create_detection_array <- function(data) { 
   species <- sort(unique(data$alpha_code))  
   sites <- sort(unique(data$point_id))
   dates <- sort(unique(data$survey_date))
@@ -219,3 +215,15 @@ summary(out_SALS)
 
 cat("\n======== SESP RESULTS ========\n")
 summary(out_SESP)
+
+## checks
+
+# what % of site-visits actually detected each species?
+date_time_fix %>%
+  filter(alpha_code %in% c("SALS", "SESP", "CLRA")) %>%
+  group_by(alpha_code) %>%
+  summarise(
+    total_visits = n(),
+    detections = sum(presence, na.rm = TRUE),
+    detection_rate = mean(presence, na.rm = TRUE)
+  )

@@ -21,6 +21,8 @@ This code outlines 4 different model classification iterations, each differing b
 knitr::opts_chunk$set(echo = TRUE)
 knitr::opts_knit$set(root.dir = "/Users/alyssabueno/Desktop/marshbirdsoutput/round_13") # increase by 1 everytime you run a new model
 
+out_dir <- "~/Desktop/marshbirdsoutput/round_13"
+
 library(terra)
 library(randomForest)
 library(dplyr)
@@ -225,10 +227,10 @@ cat("\n========== ITERATION 2: NDWI + NDVI + PCA ==========\n")
 
 # Select columns
 train_2 <- training_data_full %>% 
-  select(ndwi, ndvi, starts_with("PCA"), class)
+  dplyr::select(ndwi, ndvi, starts_with("PCA"), class)
 
 test_2 <- test_data_full %>% 
-  select(ndwi, ndvi, starts_with("PCA"), class)
+  dplyr::select(ndwi, ndvi, starts_with("PCA"), class)
 
 # Train
 rf_model_2 <- randomForest(class ~ ., 
@@ -253,10 +255,10 @@ cat("\n========== ITERATION 3: NAIP + NDVI ==========\n")
 
 # Select columns
 train_3 <- training_data_full %>% 
-  select(starts_with("naip"), ndvi, class)
+  dplyr::select(starts_with("naip"), ndvi, class)
 
 test_3 <- test_data_full %>% 
-  select(starts_with("naip"), ndvi, class)
+  dplyr::select(starts_with("naip"), ndvi, class)
 
 # Train
 rf_model_3 <- randomForest(class ~ ., 
@@ -281,10 +283,10 @@ cat("\n========== ITERATION 4: NAIP Only ==========\n")
 
 # Select columns
 train_4 <- training_data_full %>% 
-  select(starts_with("naip"), class)
+  dplyr::select(starts_with("naip"), class)
 
 test_4 <- test_data_full %>% 
-  select(starts_with("naip"), class)
+  dplyr::select(starts_with("naip"), class)
 
 # Train
 rf_model_4 <- randomForest(class ~ ., 
@@ -309,10 +311,10 @@ cat("\n========== ITERATION 5: PCA Only ==========\n")
 
 # Select columns
 train_5 <- training_data_full %>% 
-  select(starts_with("PCA"), class)
+  dplyr::select(starts_with("PCA"), class)
 
 test_5 <- test_data_full %>% 
-  select(starts_with("PCA"), class)
+  dplyr::select(starts_with("PCA"), class)
 
 # Train
 rf_model_5 <- randomForest(class ~ ., 
@@ -441,7 +443,12 @@ colors <- c(
 )
 
 # Plot one of the classified rasters
-example_file <- list.files(out_dir, pattern = "_classified\\.tif$", full.names = TRUE)[4]
+example_file <- 
+  # list.files(
+                          "~/Desktop/marshbirdsoutput/round_13/w_montauk_raster_200_model2_classified.tif"
+                           # pattern = "_classified\\.tif$", 
+                           # full.names = TRUE)[4]
+
 classified <- rast(example_file)
 plot(classified, col = colors, main = basename(example_file))
 ```
@@ -468,7 +475,7 @@ cat("Shapefile loaded. Number of plots:", nrow(plots), "\n")
 plot_lookup <- plots %>%
   st_drop_geometry() %>%
   mutate(ID = row_number()) %>%
-  select(ID, point_id)
+  dplyr::select(ID, point_id)
 
 # Convert to terra format
 plots_terra <- vect(plots)
@@ -516,7 +523,7 @@ all_values <- all_values %>%
 all_values <- all_values %>%
   mutate(class = as.numeric(class)) %>%
   left_join(class_mapping, by = c("class" = "class_code")) %>%
-  select(-class) %>%
+  dplyr::select(-class) %>%
   rename(class = class_name) %>%
   filter(!is.na(class), !is.na(point_id))
 
@@ -530,7 +537,7 @@ percents <- all_values %>%
 
 # Pivot to wide format: one row per plot, one column per class
 percent_cover <- percents %>%
-  select(point_id, class, percent) %>%
+  dplyr::select(point_id, class, percent) %>%
   pivot_wider(
     names_from = class,
     values_from = percent,
