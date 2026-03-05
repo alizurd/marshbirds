@@ -1,16 +1,19 @@
 # Tidal Marsh Bird Project
 
-This project is a community ecology study on the relationship between secretive marsh birds and their habitats.
+My goal is to use habitat + survey data data to identify relationships between tidal marsh birds and their habitats. 
 
 ## TODO 
 1. classify marsh habitat :white_check_mark:
 2. extrapolate to study plots :white_check_mark:
-3. model species richness
-4. model abundance
-5. model presence/absence
-6. results
+3. model presence/absence :white_check_mark:
+4. model total_count :white_check_mark:
+5. model species richness (potential analysis)
+6. model abundance (potential analysis)
 
 ## Update
-I successfully classified 3 of my plots (proof of concept :white_check_mark:)! I am currently working on improving model accuracy and checking validation metrics.
+2026-03-04: I successfully classified the rasters, and was able to run spOccupancy model on presence/ absence data for CLRA, SALS, & SESP. 
+Additionally, I ran a negative binomial GLM on total count. For next steps, I will be evaluating model results and running additional checks. Stay tuned!
 
-![Classification](images/plot_mud.png)
+![Classification](images/new_class.png)
+
+![Classification Models](images/model_comps.png)
