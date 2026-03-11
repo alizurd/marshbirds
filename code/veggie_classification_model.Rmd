@@ -19,9 +19,9 @@ This code outlines 4 different model classification iterations, each differing b
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-knitr::opts_knit$set(root.dir = "/Users/alyssabueno/Desktop/marshbirdsoutput/round_13") # increase by 1 everytime you run a new model
+knitr::opts_knit$set(root.dir = "/Users/alyssabueno/Desktop/marshbirdsoutput/round_16") # increase by 1 everytime you run a new model
 
-out_dir <- "~/Desktop/marshbirdsoutput/round_13"
+out_dir <- "~/Desktop/marshbirdsoutput/round_16"
 
 library(terra)
 library(randomForest)
@@ -38,9 +38,9 @@ library(ggplot2)
 
 # these are the training rasters
 raster_files <- c(
-  "/Users/alyssabueno/Desktop/marshbirds_data/clips/clip_bx.tif",
-  "/Users/alyssabueno/Desktop/marshbirds_data/clips/clip_li.tif",
-  "/Users/alyssabueno/Desktop/marshbirds_data/clips/clip_gb.tif"
+  "/Users/alyssabueno/Desktop/marshbirds_data/training_clips/training_clip_bx.tif",
+  "/Users/alyssabueno/Desktop/marshbirds_data/training_clips/training_clip_li.tif",
+  "/Users/alyssabueno/Desktop/marshbirds_data/training_clips/training_clip_gb.tif"
 )
 
 # these are the empty polygons with the class labels
@@ -116,7 +116,7 @@ extracted_clean <- na.omit(extracted)
 # Sample balanced training data
 training_data_full <- extracted_clean %>%
   group_by(class) %>%
-  sample_n(min(2000, n())) %>%
+  sample_n(min(3000, n())) %>%
   ungroup() %>%
   mutate(class = factor(class))
 
@@ -368,7 +368,7 @@ files <- list.files(
   full.names = TRUE
 )
 
-out_dir <- "~/Desktop/marshbirdsoutput/round_13/"
+out_dir <- "~/Desktop/marshbirdsoutput/round_16/"
 dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
 
 # -------------------------------------------------------------------
@@ -445,7 +445,7 @@ colors <- c(
 # Plot one of the classified rasters
 example_file <- 
   # list.files(
-                          "~/Desktop/marshbirdsoutput/round_13/w_montauk_raster_200_model2_classified.tif"
+                          "~/Desktop/marshbirdsoutput/round_16/e_montauk_raster_200_model3_classified.tif"
                            # pattern = "_classified\\.tif$", 
                            # full.names = TRUE)[4]
 
