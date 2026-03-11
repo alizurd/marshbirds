@@ -17,3 +17,5 @@ Additionally, I ran a negative binomial GLM on total count. For next steps, I wi
 ![Classification](images/new_class.png)
 
 ![Classification Models](images/model_comps.png)
+
+![Classification Model Tables](images/model_table.png)
