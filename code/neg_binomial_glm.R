@@ -1,4 +1,7 @@
-library(MASS)  # for glm.nb
+library(MASS) 
+library(janitor)
+library(dplyr)
+library(lubridate)
 
 # ---------------------------------------------
 # Ingest data for GLM
@@ -7,7 +10,7 @@ library(MASS)  # for glm.nb
 sharp_files <- read.csv("~/Desktop/NY_SHARP Survey Data Master File 2011-2024 copy.csv")
 sharp_files <- clean_names(sharp_files)
 
-hab_data <- read.csv("~/Desktop/percent_cover_by_plot_march.csv")
+hab_data <- read.csv("~/Desktop/percent_cover_by_plot_jan.csv")
 
 ## checking the habitat data for multicollinearity
 # hab_data %>%
@@ -61,7 +64,19 @@ date_time_fix <- sharp_files %>%
 ny_bird_data <- date_time_fix %>%
   filter(
     # state == "NY",
-    year %in% c(2012, 2013, 2014, 2015, 2016, 2018, 2021, 2022, 2023, 2024),
+    year %in% c(
+                # 2012, 
+                # 2013, 
+                # 2014, 
+                # 2015, 
+                # 2016, 
+                2018,
+                2019,
+                2021, 
+                2022, 
+                2023, 
+                2024
+                ),
     alpha_code %in% c("SALS", "SESP", "CLRA")) # potentially include VIRA and LEBI in future models
 
 # ---------------------------------------------
