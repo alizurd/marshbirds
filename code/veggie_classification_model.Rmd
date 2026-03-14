@@ -113,10 +113,14 @@ for (i in 1:length(rasters)) { # starting a loop over all rasters (rasters has 3
 extracted <- bind_rows(all_extracted)
 extracted_clean <- na.omit(extracted)
 
+# set mud and open water as the same class = ow
+extracted_clean$class <- ifelse(extracted_clean$class %in% c("md", "ow"), "ow", extracted_clean$class)
+extracted_clean$class <- as.factor(extracted_clean$class)
+
 # Sample balanced training data
 training_data_full <- extracted_clean %>%
   group_by(class) %>%
-  sample_n(min(3000, n())) %>%
+  sample_n(min(2000, n())) %>%
   ungroup() %>%
   mutate(class = factor(class))
 
@@ -181,6 +185,11 @@ for (i in 1:length(test_rasters)) {
 }
 
 extracted_test <- bind_rows(test_extracted)
+
+# set mud and open water as the same class = ow
+extracted_test$class <- ifelse(extracted_test$class %in% c("md", "ow"), "ow", extracted_test$class)
+extracted_test$class <- as.factor(extracted_test$class)
+
 test_data_full <- na.omit(extracted_test) %>%
   mutate(class = factor(class))
 
@@ -445,7 +454,7 @@ colors <- c(
 # Plot one of the classified rasters
 example_file <- 
   # list.files(
-                          "~/Desktop/marshbirdsoutput/round_16/e_montauk_raster_200_model3_classified.tif"
+                          "~/Desktop/marshbirdsoutput/round_16/e_montauk_raster_200_model2_classified.tif"
                            # pattern = "_classified\\.tif$", 
                            # full.names = TRUE)[4]
 

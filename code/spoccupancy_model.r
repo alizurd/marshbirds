@@ -16,7 +16,7 @@ sharp_files <- clean_names(sharp_files)
 View(sharp_files)
 
 # import habitat data
-hab_data <- read.csv("~/Desktop/percent_cover_by_plot_march.csv")
+hab_data <- read.csv("~/Desktop/percent_cover_by_plot_jan.csv")
 
 # ---------------------------------------------
 # cleaning data
