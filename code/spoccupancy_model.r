@@ -13,7 +13,7 @@ library(lubridate)
 # sharp_files <- sprintf("~/Desktop/sharp_data/working_data/SHARP_surveyData_%d.csv", years)
 sharp_files <- read.csv("~/Desktop/NY_SHARP Survey Data Master File 2011-2024 copy.csv")
 sharp_files <- clean_names(sharp_files)
-View(sharp_files)
+# View(sharp_files)
 
 # import habitat data
 hab_data <- read.csv("~/Desktop/percent_cover_by_plot_jan.csv")
@@ -61,18 +61,37 @@ date_time_fix <- sharp_files %>%
 # ---------------------------------------------
 
 #filter out NY state and 3 species of interest -- update: new files that Liz sent already filter state
-ny_bird_data <- date_time_fix %>%
-  filter(
+# ny_bird_data <- date_time_fix %>%
+#   filter(
     # state == "NY",
-         alpha_code %in% c("SALS", "SESP", "CLRA")) # potentially include VIRA and LEBI in future models
+         # alpha_code %in% c("SALS", "SESP", "CLRA"
+                           )) # potentially include VIRA and LEBI in future models
 
 # ---------------------------------------------
 # join habitat data with survey data
 # ---------------------------------------------
 
-full_data <- ny_bird_data %>%
+full_data <- date_time_fix %>%
   left_join(hab_data, by = "point_id") %>%
   filter(!is.na(hm)) 
+
+
+# create a complete grid of all site-visit-species combos
+all_visits <- full_data %>%
+  distinct(point_id, survey_date)
+
+focal_species <- c("CLRA", "SESP", "SALS")
+
+complete_grid <- all_visits %>%
+  crossing(alpha_code = focal_species)
+
+# join actual observations onto the complete grid
+focal_species_data <- complete_grid %>%
+  left_join(
+    full_data %>% filter(alpha_code %in% focal_species),
+    by = c("point_id", "survey_date", "alpha_code")
+  ) %>%
+  mutate(presence = ifelse(is.na(presence), 0L, presence))
 
 # # ----------------------------------------------------------------------
 # # filter out the sites that don't have any survey data
@@ -151,21 +170,20 @@ create_det_matrix <- function(data, covariate_name) {
 # ----------------------------------------------------------------------
 # Create arrays and matrices 
 # ----------------------------------------------------------------------
-y_array <- create_detection_array(full_data_clean)
+y_array <- create_detection_array(focal_species_data)
 
 # Site covariates
-occ_covs <- full_data_clean %>%
-  select(point_id, hm, lm, rd, up, ph) %>%
-  distinct() %>%
+occ_covs <- focal_species_data %>%
+  distinct(point_id, hm, lm, rd, ph) %>%
   arrange(point_id) %>%
-  select(-point_id)
+  dplyr::select(-point_id)
 
 # Detection covariates
 det_covs <- list(
-  temp = create_det_matrix(full_data_clean, "temp_f"),
-  time = create_det_matrix(full_data_clean, "time"),
-  wind = create_det_matrix(full_data_clean, "wind_sp"),
-  noise = create_det_matrix(full_data_clean, "noise")
+  temp = create_det_matrix(focal_species_data, "temp_f"),
+  time = create_det_matrix(focal_species_data, "time"),
+  wind = create_det_matrix(focal_species_data, "wind_sp"),
+  noise = create_det_matrix(focal_species_data, "noise")
 )
 
 
@@ -192,7 +210,7 @@ for (sp in 1:3) {
   
   # Run model
   out <- PGOcc(  
-    occ.formula = ~ hm + lm + rd + up + ph,
+    occ.formula = ~ hm + lm + rd + ph,
     det.formula = ~ temp + noise + wind,
     data = data_filtered,
     n.samples = 20000,
