@@ -14,7 +14,7 @@ My goal is to use habitat + survey data data to identify relationships between t
 2026-03-04: I successfully classified the rasters, and was able to run spOccupancy model on presence/ absence data for CLRA, SALS, & SESP. 
 Additionally, I ran a negative binomial GLM on total count. For next steps, I will be evaluating model results and running additional checks. Stay tuned!
 
-![Classification](images/new_class.png)
+![Classification](images/montauk_image.png)
 
 ![Classification Models](images/model_comps.png)
 
