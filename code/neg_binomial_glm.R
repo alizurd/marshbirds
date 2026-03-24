@@ -65,11 +65,12 @@ ny_bird_data <- date_time_fix %>%
   filter(
     # state == "NY",
     year %in% c(
-                # 2012, 
-                # 2013, 
-                # 2014, 
-                # 2015, 
-                # 2016, 
+                2012,
+                2013,
+                2014,
+                2015,
+                2016,
+      
                 2018,
                 2019,
                 2021, 
@@ -83,7 +84,7 @@ ny_bird_data <- date_time_fix %>%
 # Prepare data for GLM
 # ---------------------------------------------
 
-# summarise to one row per site per species (average count across visits)
+# summarise to one row per site per species 
 glm_data <- ny_bird_data %>%
   group_by(point_id, alpha_code) %>%
   summarise(
@@ -95,7 +96,7 @@ glm_data <- ny_bird_data %>%
   left_join(hab_data, by = "point_id") %>%
   filter(!is.na(hm))  # drop sites without habitat data
 
-# # scale habitat covariates — helps with model convergence and comparability
+# # scale habitat covariates
 # glm_data <- glm_data %>%
 #   mutate(across(c(hm, lm, rd, up, ph), scale))
 
@@ -112,7 +113,7 @@ for (sp in c("CLRA", "SALS", "SESP")) {
   sp_data <- glm_data %>% filter(alpha_code == sp)
   
   model <- glm.nb(
-    total_count ~ hm + lm + rd + up + ph + offset(log(n_visits)),
+    total_count ~ hm + lm + up + ph + offset(log(n_visits)),
     data = sp_data
   )
   

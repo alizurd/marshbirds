@@ -114,7 +114,7 @@ extracted <- bind_rows(all_extracted)
 extracted_clean <- na.omit(extracted)
 
 # set mud and open water as the same class = ow
-extracted_clean$class <- ifelse(extracted_clean$class %in% c("md", "ow"), "ow", extracted_clean$class)
+extracted_clean$class <- ifelse(extracted_clean$class %in% c("md", "sd"), "sd", extracted_clean$class)
 extracted_clean$class <- as.factor(extracted_clean$class)
 
 # Sample balanced training data
