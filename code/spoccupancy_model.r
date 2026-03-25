@@ -46,7 +46,15 @@ date_time_fix <- sharp_files %>%
 sites_with_hab <- hab_data %>% distinct(point_id)
 
 full_data <- date_time_fix %>%
-  filter(point_id %in% sites_with_hab$point_id)
+  filter(point_id %in% sites_with_hab$point_id) %>%
+  # collapse multiple visits on same date to one row per site-date-species
+  # presence = 1 if detected in any visit; covariates take the first visit
+  group_by(point_id, survey_date, alpha_code) %>%
+  summarise(
+    across(c(observer, tide, temp_f, wind_sp, sky, noise, time), ~ first(.x)),
+    presence = max(presence, na.rm = TRUE),
+    .groups = "drop"
+  )
 
 # ---------------------------------------------
 # build complete site x date x species grid
@@ -152,7 +160,10 @@ y_array <- create_detection_array(full_data_clean)
 
 # site covariates — one row per site
 occ_covs <- full_data_clean %>%
-  distinct(point_id, hm, lm, ph) %>%
+  group_by(point_id) %>%
+  slice(1) %>%
+  ungroup() %>%
+  dplyr::select(point_id, hm, lm, ph) %>%
   arrange(point_id)
 
 # verify one row per site before proceeding
@@ -193,7 +204,7 @@ for (sp in 1:3) {
   
   out <- PGOcc(  
     occ.formula = ~ hm + lm + ph,
-    det.formula = ~ temp + noise + wind,
+    det.formula = ~ temp + noise + wind + time,
     data = data_filtered,
     n.samples = 20000,
     n.burn = 10000,
@@ -222,9 +233,9 @@ summary(out_SESP)
 # Checks
 # ----------------------------------------------------------------------
 
-# detection rates per species
-date_time_fix %>%
-  filter(alpha_code %in% c("SALS", "SESP", "CLRA")) %>%
+# detection rates per species (using modeled data only — sites with habitat data)
+full_data_clean %>%
+  filter(alpha_code %in% focal_species) %>%
   group_by(alpha_code) %>%
   summarise(
     total_visits = n(),
