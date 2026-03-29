@@ -72,9 +72,9 @@ for (i in 1:length(rasters)) { # starting a loop over all rasters (rasters has 3
   ndvi <- (naip[[4]] - naip[[1]]) / (naip[[4]] + naip[[1]]) # measures greenness
   names(ndvi) <- "ndvi"
   
-  ndwi <- (naip[[4]] - naip[[2]]) / (naip[[4]] + naip[[2]]) # detects water and wet surfaces
+  ndwi <- (naip[[2]] - naip[[4]]) / (naip[[2]] + naip[[4]]) # McFeeters: (Green - NIR) / (Green + NIR)
   names(ndwi) <- "ndwi"
-  
+
   brightness <- (naip[[1]] + naip[[2]] + naip[[3]] + naip[[4]]) / 4 # mean of all 4 bands, average reflectance
   names(brightness) <- "brightness"
   
@@ -161,9 +161,9 @@ for (i in 1:length(test_rasters)) {
   ndvi <- (naip[[4]] - naip[[1]]) / (naip[[4]] + naip[[1]])
   names(ndvi) <- "ndvi"
   
-  ndwi <- (naip[[4]] - naip[[2]]) / (naip[[4]] + naip[[2]])
+  ndwi <- (naip[[2]] - naip[[4]]) / (naip[[2]] + naip[[4]])
   names(ndwi) <- "ndwi"
-  
+
   brightness <- (naip[[1]] + naip[[2]] + naip[[3]] + naip[[4]]) / 4
   names(brightness) <- "brightness"
   
@@ -186,8 +186,8 @@ for (i in 1:length(test_rasters)) {
 
 extracted_test <- bind_rows(test_extracted)
 
-# set mud and open water as the same class = ow
-extracted_test$class <- ifelse(extracted_test$class %in% c("md", "ow"), "ow", extracted_test$class)
+# set mud and sand as the same class = sd (matching training)
+extracted_test$class <- ifelse(extracted_test$class %in% c("md", "sd"), "sd", extracted_test$class)
 extracted_test$class <- as.factor(extracted_test$class)
 
 test_data_full <- na.omit(extracted_test) %>%
@@ -477,7 +477,7 @@ cat("Found", length(classified_files), "classified rasters to process\n")
 
 # Load shapefile and set CRS to match rasters
 plots <- st_read("~/Desktop/marshbirds_data/buffers/buffer_all_200.shp")
-plots <- st_set_crs(plots, crs(rast(classified_files[1])))  # match CRS to rasters
+plots <- st_transform(plots, crs(rast(classified_files[1])))  # reproject to match rasters
 cat("Shapefile loaded. Number of plots:", nrow(plots), "\n")
 
 # Build lookup table: terra's sequential ID -> point_id
