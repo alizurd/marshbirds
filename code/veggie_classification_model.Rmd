@@ -1,7 +1,7 @@
 ---
 title: "Saltmarsh Habitat Classification Models"
 author: "Alyssa Bueno"
-date: "2026-02-21"
+date: "2026-03-29"
 output: 
   pdf_document:
       highlight: tango
@@ -11,17 +11,17 @@ output:
 ## Saltmarsh Habitat Classification
 This code outlines 4 different model classification iterations, each differing by the input layers. 
 
-1. NDWI + NDVI + PCA + NAIP + Brightness
+1. NDWI + NDVI + PCA + NAIP (no brightness)
 2. NDWI + NDVI + PCA
-3. NAIP + NDVI
+3. NDVI + PCA
 4. NAIP only
 5. PCA only
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-knitr::opts_knit$set(root.dir = "/Users/alyssabueno/Desktop/marshbirdsoutput/round_16") # increase by 1 everytime you run a new model
+knitr::opts_knit$set(root.dir = "/Users/alyssabueno/Desktop/marshbirdsoutput/round_17") # increase by 1 everytime you run a new model
 
-out_dir <- "~/Desktop/marshbirdsoutput/round_16"
+out_dir <- "~/Desktop/marshbirdsoutput/round_17"
 
 library(terra)
 library(randomForest)
@@ -197,14 +197,14 @@ cat("\nTest samples per class:\n")
 print(table(test_data_full$class))
 ```
 
-# ITERATION 1: Full Model (NAIP + NDVI + NDWI + Brightness + PCA)
+# ITERATION 1: Full Model (NAIP + NDVI + NDWI + PCA)
 
 ```{r}
 cat("\n========== ITERATION 1: Full Model ==========\n")
 
-# Use all columns from training_data_full
-rf_model_1 <- randomForest(class ~ ., 
-                           data = training_data_full, 
+# Use all columns from training_data_full except brightness
+rf_model_1 <- randomForest(class ~ . - brightness,
+                           data = training_data_full,
                            ntree = 500)
 
 # Test
@@ -257,17 +257,17 @@ print(confusionMatrix(preds_2, test_2$class))
 saveRDS(rf_model_2, "~/Desktop/marshbirds_data/rf_model_2_ndwi_ndvi_pca.rds")
 ```
 
-# ITERATION 3: NAIP + NDVI
+# ITERATION 3: NDVI + PCA
 
 ```{r}
-cat("\n========== ITERATION 3: NAIP + NDVI ==========\n")
+cat("\n========== ITERATION 3: NDVI + PCA ==========\n")
 
 # Select columns
-train_3 <- training_data_full %>% 
-  dplyr::select(starts_with("naip"), ndvi, class)
+train_3 <- training_data_full %>%
+  dplyr::select(ndvi, starts_with("PCA"), class)
 
-test_3 <- test_data_full %>% 
-  dplyr::select(starts_with("naip"), ndvi, class)
+test_3 <- test_data_full %>%
+  dplyr::select(ndvi, starts_with("PCA"), class)
 
 # Train
 rf_model_3 <- randomForest(class ~ ., 
@@ -282,7 +282,7 @@ print(rf_model_3)
 print(confusionMatrix(preds_3, test_3$class))
 
 # Save model
-saveRDS(rf_model_3, "~/Desktop/marshbirds_data/rf_model_3_naip_ndvi.rds")
+saveRDS(rf_model_3, "~/Desktop/marshbirds_data/rf_model_3_ndvi_pca.rds")
 ```
 
 # ITERATION 4: NAIP Only
@@ -341,7 +341,7 @@ print(confusionMatrix(preds_5, test_5$class))
 saveRDS(rf_model_5, "~/Desktop/marshbirds_data/rf_model_5_pca.rds")
 ```
 
-# PART 3: Classify New Rasters (Choose Your Model)
+# PART 3: Classify New Rasters (Choose Model)
 
 ```{r}
 # PART 3: Classify New Rasters (Choose Your Model)
@@ -352,13 +352,13 @@ CHOSEN_MODEL <- 2  # Change this to 1, 2, 3, 4, or 5
 # Load the chosen model
 if (CHOSEN_MODEL == 1) {
   rf_model <- rf_model_1
-  feature_cols <- names(training_data_full)[names(training_data_full) != "class"]
+  feature_cols <- names(training_data_full)[!names(training_data_full) %in% c("class", "brightness")]
 } else if (CHOSEN_MODEL == 2) {
   rf_model <- rf_model_2
   feature_cols <- c("ndwi", "ndvi", paste0("PCA", 1:5))
 } else if (CHOSEN_MODEL == 3) {
   rf_model <- rf_model_3
-  feature_cols <- c(paste0("naip", 1:4), "ndvi")
+  feature_cols <- c("ndvi", paste0("PCA", 1:5))
 } else if (CHOSEN_MODEL == 4) {
   rf_model <- rf_model_4
   feature_cols <- paste0("naip", 1:4)
@@ -377,7 +377,7 @@ files <- list.files(
   full.names = TRUE
 )
 
-out_dir <- "~/Desktop/marshbirdsoutput/round_16/"
+out_dir <- "~/Desktop/marshbirdsoutput/round_17/"
 dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
 
 # -------------------------------------------------------------------
@@ -396,7 +396,7 @@ for (f in files) {
   names(ndvi) <- "ndvi"
   
   # --- Calculate NDWI (same formula as original) ---
-  ndwi <- (naip[[4]] - naip[[2]]) / (naip[[4]] + naip[[2]])
+  ndwi <- (naip[[2]] - naip[[4]]) / (naip[[2]] + naip[[4]])
   names(ndwi) <- "ndwi"
   
   # --- Calculate Brightness (same formula as original) ---
@@ -454,7 +454,7 @@ colors <- c(
 # Plot one of the classified rasters
 example_file <- 
   # list.files(
-                          "~/Desktop/marshbirdsoutput/round_16/e_montauk_raster_200_model2_classified.tif"
+                          "~/Desktop/marshbirdsoutput/round_17/e_montauk_raster_200_model2_classified.tif"
                            # pattern = "_classified\\.tif$", 
                            # full.names = TRUE)[4]
 
@@ -568,11 +568,11 @@ write.csv(percent_cover,
 ```{r}
 # Summary table
 results <- data.frame(
-  Model = c("Full Model", "NDWI+NDVI+PCA", "NAIP+NDVI", "NAIP Only", "PCA Only"),
+  Model = c("Full Model", "NDWI+NDVI+PCA", "NDVI+PCA", "NAIP Only", "PCA Only"),
   Features = c(
-    "All",
+    "NAIP1-4, NDVI, NDWI, PCA1-5",
     "NDWI, NDVI, PCA1-5",
-    "NAIP1-4, NDVI",
+    "NDVI, PCA1-5",
     "NAIP1-4",
     "PCA1-5"
   ),
