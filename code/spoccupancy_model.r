@@ -204,7 +204,11 @@ for (sp in 1:3) {
   
   out <- PGOcc(  
     occ.formula = ~ hm + lm + ph,
-    det.formula = ~ temp + noise + wind + time,
+    det.formula = ~ temp 
+    + noise 
+    # + wind 
+    # + time
+    ,
     data = data_filtered,
     n.samples = 20000,
     n.burn = 10000,
