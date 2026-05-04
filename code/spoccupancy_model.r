@@ -250,3 +250,49 @@ full_data_clean %>%
     detections = sum(presence, na.rm = TRUE),
     detection_rate = mean(presence, na.rm = TRUE)
   )
+
+# ----------------------------------------------------------------------
+# Site prioritization scores
+# ----------------------------------------------------------------------
+
+# extract posterior mean psi and uncertainty per site for each species
+get_psi_df <- function(out_model, sp_name) {
+  sp_idx  <- which(dimnames(y_array)$species == sp_name)
+  y       <- y_array[sp_idx, , ]
+  obs     <- apply(y, 1, function(x) any(!is.na(x)))
+  data.frame(
+    point_id = names(obs)[obs],
+    psi_mean = apply(out_model$psi.samples, 2, mean),
+    psi_sd   = apply(out_model$psi.samples, 2, sd),
+    species  = sp_name
+  )
+}
+
+psi_all <- bind_rows(
+  get_psi_df(out_CLRA, "CLRA"),
+  get_psi_df(out_SALS, "SALS"),
+  get_psi_df(out_SESP, "SESP")
+)
+
+# per-species site rankings by posterior mean occupancy
+per_species_ranks <- psi_all %>%
+  group_by(species) %>%
+  mutate(species_rank = rank(-psi_mean, ties.method = "min")) %>%
+  arrange(species, species_rank)
+
+print(per_species_ranks)
+
+# composite score: sum of psi_mean across species
+# sites not modeled for a given species contribute 0
+# sites supporting multiple species will naturally rank higher
+priority_scores <- psi_all %>%
+  dplyr::select(point_id, species, psi_mean) %>%
+  pivot_wider(names_from = species, values_from = psi_mean, values_fill = 0) %>%
+  left_join(occ_covs, by = "point_id") %>%
+  mutate(
+    composite_score = CLRA + SALS + SESP,
+    composite_rank  = rank(-composite_score, ties.method = "min")
+  ) %>%
+  arrange(composite_rank)
+
+print(priority_scores)
