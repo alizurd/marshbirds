@@ -38,6 +38,10 @@ date_time_fix <- sharp_files %>%
   ) %>%
   mutate(presence = as.integer(count > 0))  
 
+# counting the numbers of points and species 
+n_distinct(date_time_fix$point_id)
+n_distinct(date_time_fix$alpha_code)
+
 # ---------------------------------------------
 # join habitat data with survey data
 # ---------------------------------------------

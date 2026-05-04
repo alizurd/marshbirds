@@ -11,7 +11,7 @@ output:
 ## Saltmarsh Habitat Classification
 This code outlines 4 different model classification iterations, each differing by the input layers. 
 
-1. NDWI + NDVI + PCA + NAIP (no brightness)
+1. NDWI + NDVI + PCA + NAIP 
 2. NDWI + NDVI + PCA
 3. NDVI + PCA
 4. NAIP only
@@ -72,7 +72,7 @@ for (i in 1:length(rasters)) { # starting a loop over all rasters (rasters has 3
   ndvi <- (naip[[4]] - naip[[1]]) / (naip[[4]] + naip[[1]]) # measures greenness
   names(ndvi) <- "ndvi"
   
-  ndwi <- (naip[[2]] - naip[[4]]) / (naip[[2]] + naip[[4]]) # McFeeters: (Green - NIR) / (Green + NIR)
+  ndwi <- (naip[[2]] - naip[[4]]) / (naip[[2]] + naip[[4]]) # (Green - NIR) / (Green + NIR)
   names(ndwi) <- "ndwi"
 
   brightness <- (naip[[1]] + naip[[2]] + naip[[3]] + naip[[4]]) / 4 # mean of all 4 bands, average reflectance
@@ -114,8 +114,8 @@ extracted <- bind_rows(all_extracted)
 extracted_clean <- na.omit(extracted)
 
 # set mud and open water as the same class = ow
-extracted_clean$class <- ifelse(extracted_clean$class %in% c("md", "sd"), "sd", extracted_clean$class)
-extracted_clean$class <- as.factor(extracted_clean$class)
+# extracted_clean$class <- ifelse(extracted_clean$class %in% c("md", "sd"), "sd", extracted_clean$class)
+# extracted_clean$class <- as.factor(extracted_clean$class)
 
 # Sample balanced training data
 training_data_full <- extracted_clean %>%
@@ -187,8 +187,8 @@ for (i in 1:length(test_rasters)) {
 extracted_test <- bind_rows(test_extracted)
 
 # set mud and sand as the same class = sd (matching training)
-extracted_test$class <- ifelse(extracted_test$class %in% c("md", "sd"), "sd", extracted_test$class)
-extracted_test$class <- as.factor(extracted_test$class)
+# extracted_test$class <- ifelse(extracted_test$class %in% c("md", "sd"), "sd", extracted_test$class)
+# extracted_test$class <- as.factor(extracted_test$class)
 
 test_data_full <- na.omit(extracted_test) %>%
   mutate(class = factor(class))
@@ -347,7 +347,7 @@ saveRDS(rf_model_5, "~/Desktop/marshbirds_data/rf_model_5_pca.rds")
 # PART 3: Classify New Rasters (Choose Your Model)
 
 # Choose which model to use for predictions
-CHOSEN_MODEL <- 2  # Change this to 1, 2, 3, 4, or 5
+CHOSEN_MODEL <- 1  # Change this to 1, 2, 3, 4, or 5
 
 # Load the chosen model
 if (CHOSEN_MODEL == 1) {
@@ -443,7 +443,7 @@ message("ALL DONE")
 colors <- c(
   "#a6d96a",  # hm  
   "#1a9641",  # lm  
-  "#8c510a",  # md  
+  # "#8c510a",  # md
   "#3288bd",  # ow  
   "#fdae61",  # ph  
   "#969696",  # rd  
@@ -454,7 +454,7 @@ colors <- c(
 # Plot one of the classified rasters
 example_file <- 
   # list.files(
-                          "~/Desktop/marshbirdsoutput/round_17/e_montauk_raster_200_model2_classified.tif"
+                          "~/Desktop/marshbirdsoutput/round_16/e_montauk_raster_200_model2_classified.tif"
                            # pattern = "_classified\\.tif$", 
                            # full.names = TRUE)[4]
 
